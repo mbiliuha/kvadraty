@@ -1007,19 +1007,23 @@ function sortKey(q){return q.split('.').map(p=>{const n=parseInt(p);return isNaN
 function qInfo(q){
   const recs=D.records.filter(r=>r.q===q||(r.extraQs&&r.extraQs.includes(q))).sort((a,b)=>a.start.localeCompare(b.start));
   const active=recs.find(r=>!r.end);
-  let last=recs.filter(r=>r.end).sort((a,b)=>b.end.localeCompare(a.end))[0];
+  const par=parentOf(q),covers=r=>r.q===par||(r.extraQs&&r.extraQs.includes(par));
+  const pRecs=par?D.records.filter(covers):[];
+  const inJob=!active&&pRecs.find(r=>!r.end)||null;           // відкритий захід на весь великий квадрат
+  let last=[...recs,...pRecs].filter(r=>r.end).sort((a,b)=>b.end.localeCompare(a.end))[0];
   const ex=SRV?EXT[q]:null,foreign=!active&&ex&&ex.busy_by?ex.busy_by:null;
   if(ex&&ex.last_end&&(!last||ex.last_end>last.end))last={q,start:ex.last_end,end:ex.last_end,agents:[],ext:true};
   const rest=last?months(last.end,today()):null;
   const {ideal,min}=D.settings;
   let cls,txt;
   if(active){cls='busy';txt='В роботі'}
+  else if(inJob){cls='busy';txt='У заході '+qLab(inJob)}
   else if(foreign){cls='busy';txt='В роботі · '+foreign}
   else if(!last){cls='none';txt='Без записів'}
   else if(rest>=ideal){cls='free';txt='Готовий'}
   else if(rest>=min){cls='soon';txt='Умовно'}
   else{cls='block';txt='Зарано'}
-  return{q,recs,active,foreign,last,rest,cls,st:cls,txt,been:[...new Set(recs.flatMap(r=>r.agents))]};
+  return{q,recs,active,inJob,foreign,last,rest,cls,st:cls,txt,been:[...new Set(recs.flatMap(r=>r.agents))]};
 }
 const RANK={busy:0,block:1,soon:2,free:3,none:4};
 function groupInfo(p){                       // зведення по батьківському квадрату
@@ -1220,7 +1224,7 @@ function workDlg(only){
     ${gs.map(G=>`<details class="wgrp"${only||gs.length===1?' open':''}><summary><b>${esc(G.name)}</b><span class="num">${G.items.length}</span></summary>
       ${G.items.sort((a,b)=>a.start.localeCompare(b.start)).map(x=>`<div class="mrow"><b class="mq">${esc(x.label)}</b>
         <div class="mw"><small>${dur(x.start,td)} · з ${fmt(x.start)}</small></div>
-        <button class="xs" onclick="closeRec(${x.g.idx});setTimeout(()=>workDlg(${only?js(only):"''"}),50)">■ Закрити</button></div>`).join('')}</details>`).join('')
+        <button class="xs" onclick="closeRec(${x.g.idx}).then(()=>workDlg(${only?js(only):"''"}))">■ Закрити</button></div>`).join('')}</details>`).join('')
       ||'<p class="muted">Зараз ніхто не в роботі.</p>'}`;
   if(!$('dlg').open)dlg.showModal();
 }
@@ -1722,6 +1726,7 @@ function openQ(q){
   }
   $('dlg-body').innerHTML=`
     <div class="qs-head"><h2 id="dlg-title">Квадрат ${esc(q)}</h2><span class="stamp s-${i.cls}">${esc(i.txt)}</span></div>
+    ${leaf&&i.inJob?`<div class="warn w-yel" style="margin:6px 0">Квадрат ${esc(parentOf(q))} зараз у заході «${esc(qLab(i.inJob))}» — відпочинок почнеться, коли закриють весь захід.</div>`:''}
     <div class="qs-sub muted">${leaf&&i.active?`в роботі з ${fmt(i.active.start)} · ${dur(i.active.start,today())}`:leaf&&i.last?`відпочиває ${dur(i.last.end,today())} · востаннє ${fmt(i.last.end)}`:leaf?'записів ще немає':''}</div>
     <div class="qs-act">${act}</div>
     ${D.plan&&D.plan[q]?`<div class="muted" style="font-size:12px;margin:-4px 0 10px">Закріплений за: ${mgrTag({mgr:D.plan[q]})}</div>`:''}
@@ -1864,16 +1869,37 @@ function renderToday(){
     <div class="panel tcol"><h2>Потребує уваги</h2>${attention}</div>
     <div class="panel tcol"><h2>Далі в черзі</h2>${queue}</div></div>`;
 }
-function closeRec(idx){
+async function closeRec(idx){
   const r=D.records[idx];if(!r)return;
   if(r.start>today()){alert('Початок у майбутньому — виправте запис через ✎ в «Історії».');return}
-  if(editRef===r||(r.grp&&editGrp===r.grp))resetForm();
-  const snap=snapRec(),targets=r.grp?D.records.filter(x=>x.grp===r.grp&&!x.end):[r];
-  targets.forEach(x=>{x.end=today()});
+  const td=today(),snap=snapRec();
+  const targets=r.grp?D.records.filter(x=>x.grp===r.grp&&!x.end):[r];
+  // 1) закриваємо великий квадрат (захід) — разом з усіма його відкритими підквадратами
   const kq=[r.q,...(r.extraQs||[])].flatMap(kidsOf);
-  const kids=kq.length?D.records.filter(x=>!x.end&&kq.includes(x.q)&&x.start<=today()):[];
-  kids.forEach(x=>{x.end=today()});
-  save();hap('ok');toast(`Закрито: ${targets.map(x=>x.q).join(', ')}${kids.length?` + ${kids.length} підквадр.`:''}`,snap);
+  const kids=kq.length?D.records.filter(x=>!x.end&&kq.includes(x.q)&&x.start<=td&&!targets.includes(x)):[];
+  if(kids.length&&!await ask(`Закрити захід «${qLab(r)}» повністю?\nРазом з ним закриються ${kids.length} відкритих підквадратів — і почнеться відпочинок усієї території.`))return;
+  if(editRef===r||(r.grp&&editGrp===r.grp))resetForm();
+  targets.forEach(x=>{x.end=td});kids.forEach(x=>{x.end=td});
+  let extra=null;
+  // 2) закрили підквадрат — якщо в цьому великому квадраті більше нічого не відкрито, питаємо про весь захід
+  const par=parentOf(r.q);
+  if(par&&!kids.length){
+    const job=D.records.find(x=>!x.end&&(x.q===par||(x.extraQs||[]).includes(par)));
+    const stillOpen=D.records.filter(x=>!x.end&&parentOf(x.q)===par);
+    if(job&&!stillOpen.length){
+      const other=[job.q,...(job.extraQs||[])].filter(z=>z!==par);
+      const otherOpen=D.records.filter(x=>!x.end&&other.includes(parentOf(x.q)));
+      save();
+      if(await ask(`Усі підквадрати ${par} закрито.\nЗакрити також захід «${qLab(job)}» повністю?`+
+        (otherOpen.length?`\n\nУвага: у ${other.join(', ')} ще відкрито ${otherOpen.length} підквадратів — вони теж закриються.`:
+          other.length?'':'\n\nЯкщо захід ще триває в іншому квадраті — натисніть «Скасувати».'))){
+        job.end=td;otherOpen.forEach(x=>{x.end=td});extra=job;
+      }
+    }
+  }
+  save();hap('ok');
+  toast(extra?`Закрито ${targets.map(x=>x.q).join(', ')} і весь захід «${qLab(extra)}»`
+    :`Закрито: ${targets.map(x=>qLab(x)).join(', ')}${kids.length?` + ${kids.length} підквадр.`:''}`,snap);
 }
 async function quickStart(q,who){
   const name=who||($('qs-agent')||{}).value;
