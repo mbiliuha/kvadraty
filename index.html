@@ -414,6 +414,13 @@ body.srv [data-nosrv]{display:none!important}
 .wgrp summary::-webkit-details-marker{display:none}
 .wgrp summary .num{background:var(--busy);color:#fff;padding:2px 8px;font-size:11px}
 .wgrp .mrow{padding:6px 0 6px 8px}
+.jsub{display:flex;align-items:center;gap:6px;margin:0 0 0 auto;text-transform:none;letter-spacing:0;font:500 12px var(--body);color:var(--ink2);white-space:nowrap}
+.jsub input{width:16px;height:16px;margin:0;accent-color:var(--acc)}
+.jsub+#q-search{margin-left:10px!important}
+.mgr{font-weight:600;font-size:12.5px}
+#mw-btn.on{background:var(--ink);color:var(--paper)}
+body.srv-manager .fullonly{display:none!important}
+@media (max-width:700px){.row.r3m{grid-template-columns:1fr 1fr 1fr}#v-perf .stats{grid-template-columns:repeat(2,1fr)!important}}
 /* карта на весь екран */
 .fsbtn{width:34px;height:34px;line-height:32px!important;text-align:center;font-size:18px;background:var(--btnbg);color:var(--ink)!important;
   text-decoration:none;cursor:pointer}
@@ -441,6 +448,7 @@ body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size
     <button class="tab" data-v="tiles" role="tab" aria-selected="false">Реєстр</button>
     <button class="tab" data-v="plan" role="tab" aria-selected="false">Планувальник</button>
     <button class="tab" data-v="forecast" role="tab" aria-selected="false">Прогноз</button>
+    <button class="tab" data-v="perf" role="tab" aria-selected="false">Результативність</button>
     <button class="tab" data-v="hist" role="tab" aria-selected="false">Історія</button>
     <button class="tab" data-v="agents" role="tab" aria-selected="false">Агенти</button>
     <button class="tab" data-v="set" role="tab" aria-selected="false">Налаштування</button>
@@ -473,6 +481,7 @@ body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size
       <option value="3">Карта: супутник+вулиці</option>
       <option value="4">Карта: супутник</option>
     </select>
+    <button id="mw-btn" onclick="toggleWhole()" title="Показувати великі квадрати цілком або по підквадратах">◱ Цілком</button>
     <button class="only-m" id="ed-toggle" onclick="document.body.classList.toggle('m-edit');this.classList.toggle('on')">✎ Межі</button>
     <span class="muted num edtool" id="geo-count" style="margin-left:auto"></span>
   </div>
@@ -518,6 +527,18 @@ body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size
 </div>
 
 <!-- ═══ ПРОГНОЗ ═══ -->
+<div class="view" id="v-perf">
+  <div class="panel"><h2>Результативність</h2>
+    <div class="row"><div><label>Період</label><select id="pf-per" onchange="renderPerf()">
+      <option value="all">Увесь час</option><option value="12">Останні 12 міс</option><option value="year">Цей рік</option><option value="month">Цей місяць</option></select></div>
+      <div class="fullonly"><label>Менеджер</label><select id="pf-mgr" onchange="renderPerf()"></select></div></div>
+    <p class="muted">Показники беруться із заходів, де внесено договори або суми (зазвичай — запис на весь квадрат).</p>
+    <div id="pf-sum"></div>
+  </div>
+  <div class="panel"><h2>По менеджерах</h2><div style="overflow:auto"><table id="pf-m"></table></div></div>
+  <div class="panel"><h2>По квадратах</h2><div style="overflow:auto"><table id="pf-q"></table></div></div>
+</div>
+
 <div class="view" id="v-forecast">
   <div id="fc-warn"></div>
   <div class="panel"><h2>Коли території дозріють</h2><div style="overflow:auto"><table id="fc-tbl"></table></div>
@@ -545,6 +566,15 @@ body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size
         <div id="f-achips" style="margin-top:7px"></div></div>
       <div><label>Примітка · вулиці</label><input id="f-note" placeholder="крім Боян"></div>
     </div>
+    <div class="row">
+      <div class="fullonly"><label>Менеджер заходу</label><select id="f-mgr"></select></div>
+      <div><label>Додаткові квадрати · якщо кілька одночасно</label><input id="f-extra" placeholder="напр. 22, 13"></div>
+    </div>
+    <div class="row r3m">
+      <div><label>Договорів</label><input id="f-con" type="number" inputmode="numeric" min="0"></div>
+      <div><label>Укладено, ₴</label><input id="f-sig" type="number" inputmode="decimal" min="0"></div>
+      <div><label>Оплата, ₴</label><input id="f-paid" type="number" inputmode="decimal" min="0"></div>
+    </div>
     <label style="display:flex;align-items:center;gap:9px;cursor:pointer;text-transform:none;letter-spacing:0;
                   font:500 13px/1.3 var(--body);color:var(--ink);margin:0 0 12px">
       <input type="checkbox" id="f-part" style="width:16px;height:16px;margin:0;accent-color:var(--acc)">
@@ -558,7 +588,9 @@ body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size
   </div>
   <div class="panel">
     <div class="bar"><h2 style="margin:0;border:none;padding:0">Журнал</h2>
+      <label class="jsub"><input type="checkbox" id="j-sub" onchange="setJSub(this.checked)"> підквадрати</label>
       <input id="q-search" placeholder="пошук…" style="width:220px;margin-left:auto"></div>
+    <p class="muted" id="j-hidden" style="margin:-4px 0 8px"></p>
     <div style="overflow:auto" class="only-d"><table id="tbl"></table></div>
     <div id="jlist" class="only-mb"></div>
   </div>
@@ -967,7 +999,7 @@ function sortKey(q){return q.split('.').map(p=>{const n=parseInt(p);return isNaN
 
 /* ── статус одиниці ───────────────────────── */
 function qInfo(q){
-  const recs=D.records.filter(r=>r.q===q).sort((a,b)=>a.start.localeCompare(b.start));
+  const recs=D.records.filter(r=>r.q===q||(r.extraQs&&r.extraQs.includes(q))).sort((a,b)=>a.start.localeCompare(b.start));
   const active=recs.find(r=>!r.end);
   let last=recs.filter(r=>r.end).sort((a,b)=>b.end.localeCompare(a.end))[0];
   const ex=SRV?EXT[q]:null,foreign=!active&&ex&&ex.busy_by?ex.busy_by:null;
@@ -1119,8 +1151,9 @@ function drawMap(){
   D.quadrants.forEach(q=>{
     const pts=D.geo[q];if(!pts||pts.length<3)return;n++;
     if(q===editing)return;
-    const leaf=isLeaf(q);
-    const i=leaf?qInfo(q):groupInfo(q),c=COL[i.cls];
+    if(MAPWHOLE&&parentOf(q)&&D.geo[parentOf(q)])return;       // режим «цілком»: підквадрати не малюємо
+    const leaf=isLeaf(q)||MAPWHOLE;
+    const i=isLeaf(q)?qInfo(q):groupInfo(q),c=COL[i.cls];
     if(!leaf){ // батько з дітьми — лише контур
       L.polygon(pts,{color:'#1B2028',weight:2,fill:false,dashArray:'7,5',opacity:.75,interactive:false}).addTo(layer);
       return;
@@ -1131,12 +1164,13 @@ function drawMap(){
     poly.on('click',ev=>{if(drawing||editing)return;L.DomEvent.stop(ev);openQ(q)});
     poly.on('mouseover',()=>poly.setStyle({weight:3,fillOpacity:Math.max(st.fillOpacity+.15,.3),opacity:1}));
     poly.on('mouseout',()=>poly.setStyle(base));
-    labCand.push({q,pts,c,par:parentOf(q)});
+    labCand.push({q,pts,c,par:MAPWHOLE?null:parentOf(q)});
   });
   placeLabels();
   document.getElementById('geo-count').textContent=`КОНТУРІВ ${n} / ${D.quadrants.length}`;
 }
 /* підписи без накладань: показуємо лише ті, що влазять; дрібні підквадрати при віддаленні ховаються в номер великого */
+function toggleWhole(){MAPWHOLE=!MAPWHOLE;const b=$('mw-btn');if(b){b.textContent=MAPWHOLE?'▦ Підквадрати':'◱ Цілком';b.classList.toggle('on',MAPWHOLE)}drawMap();hap()}
 function placeLabels(){
   if(!labLayer||!map)return;labLayer.clearLayers();
   const px=pts=>{const b=L.latLngBounds(pts),a=map.latLngToLayerPoint(b.getNorthWest()),z=map.latLngToLayerPoint(b.getSouthEast());return{w:Math.abs(z.x-a.x),h:Math.abs(z.y-a.y)}};
@@ -1183,6 +1217,28 @@ function workDlg(only){
         <button class="xs" onclick="closeRec(${x.g.idx});setTimeout(()=>workDlg(${only?js(only):"''"}),50)">■ Закрити</button></div>`).join('')}</details>`).join('')
       ||'<p class="muted">Зараз ніхто не в роботі.</p>'}`;
   if(!$('dlg').open)dlg.showModal();
+}
+function fillMgrSel(){
+  const names=[...new Set([MYMGR,...MANAGERS.map(m=>m.name),...D.records.map(r=>r.mgr)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
+  const f=$('f-mgr');if(f){const v=f.value;f.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');f.value=v||MYMGR}
+  const p=$('pf-mgr');if(p){const v=p.value;p.innerHTML='<option value="">Усі</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');p.value=v}
+}
+function renderPerf(){
+  if(!$('pf-m'))return;fillMgrSel();
+  const per=$('pf-per').value,mg=($('pf-mgr')||{}).value||'',td=today();
+  const from=per==='12'?addM(td,-12):per==='year'?td.slice(0,4)+'-01-01':per==='month'?td.slice(0,7)+'-01':'0000';
+  const rs=D.records.filter(r=>hasMet(r)&&r.start>=from&&(!mg||r.mgr===mg));
+  const S=a=>a.reduce((t,r)=>({n:t.n+1,c:t.c+(+r.contracts||0),s:t.s+(+r.signed||0),p:t.p+(+r.paid||0)}),{n:0,c:0,s:0,p:0});
+  const tot=S(rs);
+  $('pf-sum').innerHTML=`<div class="stats" style="margin:8px 0 0"><div class="stat"><b>${tot.n}</b><span>заходів</span></div>
+    <div class="stat"><b>${tot.c}</b><span>договорів</span></div><div class="stat"><b>${money(tot.s)||'0 ₴'}</b><span>укладено</span></div>
+    <div class="stat"><b>${tot.n?money(tot.s/tot.n):'—'}</b><span>на захід</span></div></div>`;
+  const grp=key=>{const m=new Map();rs.forEach(r=>{const k=key(r);if(!m.has(k))m.set(k,[]);m.get(k).push(r)});return [...m.entries()].map(([k,a])=>({k,a,t:S(a)})).sort((x,y)=>y.t.s-x.t.s)};
+  const head='<tr><th></th><th>Заходів</th><th>Дог.</th><th>Укладено</th><th>Оплата</th><th>На захід</th><th>Останній</th></tr>';
+  const row=(lab,x)=>`<tr><td>${lab}</td><td class="num">${x.t.n}</td><td class="num">${x.t.c}</td><td class="num">${money(x.t.s)}</td><td class="num">${money(x.t.p)}</td><td class="num">${money(x.t.s/x.t.n)}</td><td class="num">${fmt(x.a.map(r=>r.start).sort().pop())}</td></tr>`;
+  const bm=grp(r=>r.mgr||'—'),bq=grp(r=>parentOf(r.q)||r.q);
+  $('pf-m').innerHTML=bm.length?head+bm.map(x=>row(mgrTag({mgr:x.k})||esc(x.k),x)).join(''):'<tr><td class="muted">Немає заходів з показниками за цей період.</td></tr>';
+  $('pf-q').innerHTML=bq.length?head+bq.sort((a,b)=>sortKey(a.k).localeCompare(sortKey(b.k),'uk',{numeric:true})).map(x=>row(`<a href="#" onclick="openQ(${js(x.k)});return false"><b>${esc(x.k)}</b></a>`,x)).join(''):'';
 }
 function showAtt(){
   $('dlg-body').innerHTML=`<h2 id="dlg-title">Нагадування</h2>
@@ -1477,7 +1533,7 @@ function _render(){
   $('stats').innerHTML=
     [['busy','В роботі'],['free','Готові · '+D.settings.ideal+'+ міс'],['soon','Умовно · '+D.settings.min+'–'+D.settings.ideal],['block','Зарано · <'+D.settings.min],['none','Без записів']]
     .map(([s,l])=>{const [a,b]=l.split(' · ');return `<div class="stat s-${s}"><b class="t-${s}">${c(s)}</b><span>${a}${b?`<em> · ${b}</em>`:''}</span></div>`}).join('');
-  renderBackup();renderToday();renderForecast();renderSpeed();
+  renderBackup();renderToday();renderForecast();renderSpeed();renderPerf();
 
   // реєстр: батько → діти
   let k=0;
@@ -1581,25 +1637,40 @@ function _render(){
 }
 let jAll=false;
 const fmtS=d=>{if(!okDate(d))return '—';const y=d.slice(0,4);return d.slice(8,10)+'.'+d.slice(5,7)+(y===today().slice(0,4)?'':'.'+y.slice(2))};
+const qLab=r=>[r.q,...(r.extraQs||[])].join(' + ');
+const money=v=>v==null||v===''?'':(Math.round(+v)||0).toLocaleString('uk-UA')+' ₴';
+const hasMet=r=>r.contracts!=null||r.signed!=null||r.paid!=null;
+const mgrColor=n=>(MANAGERS.find(m=>m.name===n)||{}).color||'var(--ink2)';
+const mgrTag=r=>r.mgr?`<span class="mgr" style="color:${esc(mgrColor(r.mgr))}">${esc(r.mgr)}</span>`:'';
+function jSubPref(){try{const v=localStorage.getItem('kv_jsub_'+(CITY||''));return v==null?true:v==='1'}catch(_){return true}}
+function setJSub(v){try{localStorage.setItem('kv_jsub_'+(CITY||''),v?'1':'0')}catch(_){}renderJournal()}
 function renderJournal(){
-  const s=($('q-search').value||'').toLowerCase().trim();
+  const s=($('q-search').value||'').toLowerCase().trim(),subOn=jSubPref();
+  if($('j-sub'))$('j-sub').checked=subOn;
+  let hidden=0;
   const rows=D.records.map((r,idx)=>({r,idx}))
-    .filter(({r})=>!s||[r.q,r.src,fmt(r.start),fmt(r.end),r.start,r.end,r.agents.join(' '),r.note].join(' ').toLowerCase().includes(s))
+    .filter(({r})=>{if(!subOn&&!s&&r.q.includes('.')&&!hasMet(r)){hidden++;return false}return true})
+    .filter(({r})=>!s||[qLab(r),r.src,fmt(r.start),fmt(r.end),r.start,r.end,r.agents.join(' '),r.note,r.mgr].join(' ').toLowerCase().includes(s))
     .sort((a,b)=>b.r.start.localeCompare(a.r.start));
+  if($('j-hidden'))$('j-hidden').textContent=hidden?`Приховано ${hidden} записів по підквадратах — увімкніть «підквадрати», щоб побачити.`:'';
   $('tbl').innerHTML=
-    `<tr><th>Кв.</th><th>Початок</th><th>Кінець</th><th>Трив.</th><th>Агенти</th><th>Примітка</th><th></th></tr>`+
-    rows.map(({r,idx})=>`<tr><td class="num"><b>${esc(r.q)}</b>${r.grp?`<br><span class="tag" title="запис створено як «весь квадрат ${esc(r.src)}»">◱ весь ${esc(r.src)}</span>`:''}</td><td class="num">${fmt(r.start)}</td>
+    `<tr><th>Кв.</th><th>Початок</th><th>Кінець</th><th>Трив.</th><th>Агенти</th><th>Менеджер</th><th>Дог.</th><th>Укладено</th><th>Оплата</th><th>Примітка</th><th></th></tr>`+
+    rows.map(({r,idx})=>`<tr><td class="num"><b>${esc(qLab(r))}</b>${r.grp?`<br><span class="tag" title="запис створено як «весь квадрат ${esc(r.src)}»">◱ весь ${esc(r.src)}</span>`:''}</td><td class="num">${fmt(r.start)}</td>
       <td class="num">${r.end?fmt(r.end):'<span class="t-busy">в роботі</span>'}</td>
       <td class="num">${r.end?dur(r.start,r.end):'—'}${r.part?' <span class="tag" title="частковий день — не враховується у швидкості">½</span>':''}</td>
-      <td>${r.agents.map(a=>`<span class="tag">${esc(a)}</span>`).join('')}${ownerTag(r)}</td>
+      <td>${r.agents.map(a=>`<span class="tag">${esc(a)}</span>`).join('')}</td>
+      <td>${mgrTag(r)||ownerTag(r)}</td>
+      <td class="num">${r.contracts??''}</td><td class="num">${money(r.signed)}</td><td class="num">${money(r.paid)}</td>
       <td class="muted">${esc(r.note||'')}</td>
       <td style="white-space:nowrap"><button class="xs" onclick="editRec(${idx})">✎</button>
       <button class="d" onclick="del(${idx})">×</button></td></tr>`).join('');
   const lim=jAll||s?1e9:40;
   $('jlist').innerHTML=rows.slice(0,lim).map(({r,idx})=>`<div class="jrow">
-      <b class="jq">${esc(r.q)}</b>
+      <b class="jq">${esc(qLab(r))}</b>
       <div class="jm"><div class="jd">${fmtS(r.start)} – ${r.end?fmtS(r.end):'<span class="t-busy">в роботі</span>'}${r.end?` · ${dur(r.start,r.end)}`:''}${r.part?' · ½':''}${r.grp?` · <span class="muted">весь ${esc(r.src)}</span>`:''}</div>
-        <div class="ja">${esc(r.agents.join(', ')||'—')}${ownerTag(r)}</div>${r.note?`<div class="jn">${esc(r.note)}</div>`:''}</div>
+        <div class="ja">${esc(r.agents.join(', ')||'—')}${r.mgr?' · '+mgrTag(r):ownerTag(r)}</div>
+        ${hasMet(r)?`<div class="jn num">дог. ${r.contracts??0} · укладено ${money(r.signed)||'0 ₴'}${r.paid?` · оплата ${money(r.paid)}`:''}</div>`:''}
+        ${r.note?`<div class="jn">${esc(r.note)}</div>`:''}</div>
       <div class="jb"><button class="xs" onclick="editRec(${idx})" aria-label="Редагувати">✎</button><button class="d" onclick="del(${idx})" aria-label="Видалити">×</button></div>
     </div>`).join('')||'<p class="muted">Записів немає.</p>';
   if(rows.length>lim)$('jlist').innerHTML+=`<button class="xs" style="width:100%;margin-top:8px" onclick="jAll=true;renderJournal()">Показати всі (${rows.length})</button>`;
@@ -1615,12 +1686,18 @@ function cardHtml(i,k){
 function openQ(q){
   const leaf=isLeaf(q),i=leaf?qInfo(q):groupInfo(q);
   const seen=new Set();
-  const recs=(i.recs||[]).slice().sort((a,b)=>b.start.localeCompare(a.start)).filter(r=>{
+  const own=leaf?[]:D.records.filter(r=>r.q===q||(r.extraQs||[]).includes(q));
+  const recs=[...new Set([...(i.recs||[]),...own])].sort((a,b)=>b.start.localeCompare(a.start)).filter(r=>{
     if(leaf||!r.grp)return true;
     if(seen.has(r.grp))return false;seen.add(r.grp);return true});
-  const hist=recs.map(r=>`<div class="hrow"><b class="num">${esc(!leaf&&r.grp?r.src+' весь':r.q)}</b>
+  const metR=recs.filter(hasMet).slice().reverse();      // хронологічно для динаміки
+  const delta=r=>{const k=metR.indexOf(r);if(k<1||!r.signed)return'';const p=metR[k-1];if(!p.signed)return'';
+    const v=Math.round((r.signed-p.signed)/p.signed*100);return ` <span class="${v>=0?'t-free':'t-block'}">${v>=0?'+':''}${v}%</span>`};
+  const hist=recs.map(r=>`<div class="hrow"><b class="num">${esc(!leaf&&r.grp?r.src+' весь':qLab(r))}</b>
       <span class="num">${fmtS(r.start)} – ${r.end?fmtS(r.end):'зараз'}${r.end?' · '+dur(r.start,r.end):''}</span>
-      <span>${esc(r.agents.join(', '))}</span>${r.note?`<span class="muted">${esc(r.note)}</span>`:''}</div>`).join('')
+      <span>${esc(r.agents.join(', '))}${r.mgr?' · '+mgrTag(r):''}</span>
+      ${hasMet(r)?`<span class="num">дог. ${r.contracts??0} · ${money(r.signed)||'0 ₴'}${delta(r)}${r.paid?` · опл. ${money(r.paid)}`:''}</span>`:''}
+      ${r.note?`<span class="muted">${esc(r.note)}</span>`:''}</div>`).join('')
     ||'<p class="muted">Записів немає.</p>';
   let act='';
   if(leaf&&i.foreign){
@@ -1641,7 +1718,8 @@ function openQ(q){
     <div class="qs-head"><h2 id="dlg-title">Квадрат ${esc(q)}</h2><span class="stamp s-${i.cls}">${esc(i.txt)}</span></div>
     <div class="qs-sub muted">${leaf&&i.active?`в роботі з ${fmt(i.active.start)} · ${dur(i.active.start,today())}`:leaf&&i.last?`відпочиває ${dur(i.last.end,today())} · востаннє ${fmt(i.last.end)}`:leaf?'записів ще немає':''}</div>
     <div class="qs-act">${act}</div>
-    <details class="qs-more"><summary>Історія · ${recs.length}</summary>${hist}</details>
+    ${D.plan&&D.plan[q]?`<div class="muted" style="font-size:12px;margin:-4px 0 10px">Закріплений за: ${mgrTag({mgr:D.plan[q]})}</div>`:''}
+    <details class="qs-more"${metR.length?' open':''}><summary>Історія · ${recs.length}${metR.length?` · заходів з показниками ${metR.length}`:''}</summary>${hist}</details>
     <details class="qs-more"><summary>Керування</summary><div class="bar" style="margin:8px 0 0">
       ${!parentOf(q)?`<button class="xs" onclick="dlg.close();addSub(${js(q)})">+ підквадрат</button>`:''}
       ${D.geo[q]?`<button class="xs" onclick="dlg.close();startEdit(${js(q)})">✎ межі</button>`:''}
@@ -1786,7 +1864,10 @@ function closeRec(idx){
   if(editRef===r||(r.grp&&editGrp===r.grp))resetForm();
   const snap=snapRec(),targets=r.grp?D.records.filter(x=>x.grp===r.grp&&!x.end):[r];
   targets.forEach(x=>{x.end=today()});
-  save();hap('ok');toast(`Закрито: ${targets.map(x=>x.q).join(', ')}`,snap);
+  const kq=[r.q,...(r.extraQs||[])].flatMap(kidsOf);
+  const kids=kq.length?D.records.filter(x=>!x.end&&kq.includes(x.q)&&x.start<=today()):[];
+  kids.forEach(x=>{x.end=today()});
+  save();hap('ok');toast(`Закрито: ${targets.map(x=>x.q).join(', ')}${kids.length?` + ${kids.length} підквадр.`:''}`,snap);
 }
 async function quickStart(q,who){
   const name=who||($('qs-agent')||{}).value;
@@ -1918,15 +1999,25 @@ async function addRec(){
   const unknown=agents.filter(n=>!findAgent(n));
   if(unknown.length&&!await ask(`Невідомі імена: ${unknown.join(', ')}.\nСтворити нових агентів? Якщо це помилка друку — натисніть «Скасувати» і виправте.`))return;
   const note=$('f-note').value.trim(),part=$('f-part').checked;
+  const numv=id=>{const v=$(id).value.trim();return v===''?null:Math.max(0,Number(v)||0)};
+  const extraQs=spread?[]:parseQList($('f-extra').value).filter(x=>x!==q&&D.quadrants.includes(x));
+  const mgrSel=FULL()&&$('f-mgr')?$('f-mgr').value:'';
+  const met={contracts:numv('f-con'),signed:numv('f-sig'),paid:numv('f-paid')};
+  // при редагуванні зберігаємо id, власника й менеджера запису
+  const olds=editGrp?D.records.filter(r=>r.grp===editGrp):editRef?[editRef]:[];
+  const keepOf=k=>{const o=olds.find(x=>x.q===k)||(olds.length===1?olds[0]:null);return o?{id:o.id,owner:o.owner,mgr:o.mgr}:{}};
+  const mgrOf=k=>mgrSel||keepOf(k).mgr||MYMGR||'';
   if(editGrp)D.records=D.records.filter(r=>r.grp!==editGrp);
   else if(editRef)D.records=D.records.filter(r=>r!==editRef);
   if(spread){const g=editGrp||uid();
-    ks.forEach(k=>D.records.push(Object.assign({q:k,start:s,end:e||null,agents,note,grp:g,src:q},part?{part:true}:{})));
-  }else D.records.push(Object.assign({q,start:s,end:e||null,agents,note},part?{part:true}:{}));
+    ks.forEach((k,j)=>D.records.push(Object.assign({},keepOf(k),{q:k,start:s,end:e||null,agents,note,grp:g,src:q,mgr:mgrOf(k),extraQs:[]},
+      j===0?met:{contracts:null,signed:null,paid:null},part?{part:true}:{})));
+  }else D.records.push(Object.assign({},keepOf(q),{q,start:s,end:e||null,agents,note,mgr:mgrOf(q),extraQs},met,part?{part:true}:{}));
   agents.forEach(n=>{if(!findAgent(n))D.agents.push({name:n,start:'',left:false,leftDate:'',trainee:false,traineeUntil:''})});
   resetForm();save();
 }
 function resetForm(){editRef=null;editGrp=null;
+  ['f-extra','f-con','f-sig','f-paid'].forEach(id=>{const x=$(id);if(x)x.value=''});if($('f-mgr'))$('f-mgr').value=MYMGR||'';
   $('f-a').value='';$('f-note').value='';$('f-e').value='';$('f-all').checked=false;$('f-part').checked=false;
   $('f-warn').innerHTML='';
   $('btn-rec').textContent='Додати';
@@ -1938,6 +2029,10 @@ function editRec(i){
   $('f-q').value=r.grp?r.src:r.q;
   $('f-s').value=r.start;$('f-e').value=r.end||'';
   $('f-a').value=r.agents.join(', ');$('f-note').value=r.note||'';
+  $('f-extra').value=(r.extraQs||[]).join(', ');
+  const gr=r.grp?D.records.filter(x=>x.grp===r.grp):[r],mv=k=>{const v=gr.map(x=>x[k]).find(v=>v!=null);return v==null?'':v};
+  $('f-con').value=mv('contracts');$('f-sig').value=mv('signed');$('f-paid').value=mv('paid');
+  if($('f-mgr')){fillMgrSel();$('f-mgr').value=r.mgr||''}
   syncAllBox();$('f-all').checked=!!r.grp;$('f-part').checked=!!r.part;
   $('btn-rec').textContent=r.grp?`Зберегти · усі ${D.records.filter(x=>x.grp===r.grp).length}`:'Зберегти зміни';
   $('btn-cancel').style.display='';
@@ -2031,7 +2126,7 @@ function saveSet(){
 document.querySelectorAll('.panel.fold>h2').forEach(h=>h.addEventListener('click',()=>{if(isMob())h.parentNode.classList.toggle('open')}));
 const isMob=()=>!!(window.matchMedia&&window.matchMedia('(max-width:700px)').matches);
 function goTab(v){hap();const t=document.querySelector(`.tab[data-v="${v}"]`);if(t)t.click();if($('dlg').open)dlg.close();window.scrollTo(0,0)}
-function syncBnav(v){setTimeout(tgBack,0);document.querySelectorAll('#bnav button').forEach(b=>b.classList.toggle('on',b.dataset.b===v||(b.dataset.b==='more'&&['tiles','forecast','set'].includes(v))))}
+function syncBnav(v){setTimeout(tgBack,0);document.querySelectorAll('#bnav button').forEach(b=>b.classList.toggle('on',b.dataset.b===v||(b.dataset.b==='more'&&['tiles','forecast','set','perf'].includes(v))))}
 /* ── тема ── */
 function themeMode(){try{return localStorage.getItem('kv_theme')||'auto'}catch(_){return 'auto'}}
 function applyTheme(){
@@ -2093,6 +2188,7 @@ function shareReport(){
 /* ══════════ СПІЛЬНА БАЗА (Supabase) ══════════
    Сервер перевіряє підпис Telegram і віддає лише дозволене:
    свої записи й агенти — повністю; чужі квадрати — лише «в роботі · менеджер» і дату останнього закриття. */
+let MANAGERS=[],MYMGR='',MAPWHOLE=false;
 let CITY=null,ROLE=null,ME=null,PEOPLE={},EXT={},BASE=null,CITIES=[],IS_ADMIN=false,syncT=null,syncing=false,srvDirty=false;
 const FULL=()=>ROLE==='admin'||ROLE==='lead';
 const ownerTag=r=>(SRV&&FULL()&&r.owner&&r.owner!==ME)?` <span class="tag own">${esc(PEOPLE[r.owner]||'інший')}</span>`:'';
@@ -2110,20 +2206,22 @@ function fromServer(res){
   d.settings={...DEF.settings,...(res.city.settings||{})};
   d.quadrants=res.quadrants.map(x=>x.name).sort((a,b)=>sortKey(a).localeCompare(sortKey(b),'uk',{numeric:true}));
   d.geo={};res.quadrants.forEach(x=>{if(Array.isArray(x.geo)&&x.geo.length>=3)d.geo[x.name]=x.geo});
-  d.records=res.records.map(r=>{const o={id:r.id,owner:r.owner,q:r.q,start:r.start,end:r.end||null,agents:r.agents||[],note:r.note||''};
+  d.records=res.records.map(r=>{const o={id:r.id,owner:r.owner,q:r.q,start:r.start,end:r.end||null,agents:r.agents||[],note:r.note||'',
+      mgr:r.mgr||'',contracts:r.contracts??null,signed:r.signed??null,paid:r.paid??null,extraQs:r.extra_qs||[]};
     if(r.part)o.part=true;if(r.grp){o.grp=r.grp;o.src=r.src}return o});
-  d.agents=res.agents.map(a=>({id:a.id,owner:a.owner,name:a.name,start:a.start||'',left:!!a.left,leftDate:a.left_date||'',trainee:!!a.trainee,traineeUntil:a.trainee_until||''}));
+  d.agents=res.agents.map(a=>({id:a.id,owner:a.owner,name:a.name,start:a.start||'',left:!!a.left,leftDate:a.left_date||'',trainee:!!a.trainee,traineeUntil:a.trainee_until||'',mgr:a.mgr||''}));
+  d.plan={};res.quadrants.forEach(x=>{if(x.plan_mgr)d.plan[x.name]=x.plan_mgr});
   let v=null;try{v=JSON.parse(localStorage.getItem(viewKey())||'null')}catch(_){}
   d.view=v&&v.c?v:{c:res.city.center||DEF.view.c,z:res.city.zoom||12};
   d.tile=v&&Number.isInteger(v.t)?v.t:0;d.lastExport=today();
   return d;
 }
 function applyServer(res,replace){
-  ROLE=res.role;ME=res.me;PEOPLE=res.people||{};EXT={};(res.others||[]).forEach(o=>EXT[o.q]=o);
+  ROLE=res.role;ME=res.me;PEOPLE=res.people||{};MANAGERS=res.managers||[];MYMGR=res.myMgr||'';EXT={};(res.others||[]).forEach(o=>EXT[o.q]=o);
   const sd=fromServer(res);BASE=clone(sd);
   if(replace){D=sd;persistLocal();render();applyRole()}
 }
-const recKey=r=>JSON.stringify([r.q,r.start,r.end||null,r.agents||[],r.note||'',!!r.part,r.grp||null,r.src||null]);
+const recKey=r=>JSON.stringify([r.q,r.start,r.end||null,r.agents||[],r.note||'',!!r.part,r.grp||null,r.src||null,r.mgr||'',r.contracts??null,r.signed??null,r.paid??null,r.extraQs||[]]);
 const agKey=a=>JSON.stringify([a.name,a.start||'',!!a.left,a.leftDate||'',!!a.trainee,a.traineeUntil||'']);
 function srvDiff(){
   if(!BASE)return null;
@@ -2171,7 +2269,7 @@ function applyRole(){
   const b=$('citybtn');if(b){const c=CITIES.find(x=>x.id===CITY);b.textContent=(c?c.name:'Місто')+(CITIES.length>1?' ▾':'');b.style.display=''}
   const full=FULL();
   ['s-ideal','s-min','s-repeat'].forEach(id=>{const e=$(id);if(e)e.disabled=!full});
-  document.body.classList.toggle('srv-manager',!full);
+  document.body.classList.toggle('srv-manager',!full);fillMgrSel();
 }
 function gate(title,text,extra){
   let g=$('gate');if(!g){g=document.createElement('div');g.id='gate';document.body.appendChild(g)}
@@ -2228,6 +2326,12 @@ function renderAdmin(){
       <div class="muted num" style="font-size:11px">ID ${u.tg_id} · був ${fmt(String(u.last_seen).slice(0,10))}</div></div>
       ${u.is_admin?'<div class="muted" style="font-size:12px">бачить усі міста</div>':`<div class="adm-roles">${cities.map(c=>`<label>${esc(c.name)}<select onchange="setMember('${esc(c.id)}',${u.tg_id},this.value)">${Object.entries(ROLES).map(([v,t])=>`<option value="${v}"${roleOf(u.tg_id,c.id)===v?' selected':''}>${t}</option>`).join('')}</select></label>`).join('')}</div>`}
     </div>`).join('')}
+    ${cities.filter(c=>(c.managers||[]).length).map(c=>`<details class="qs-more"><summary>Менеджери зі старої версії · ${esc(c.name)}</summary>
+      <p class="muted">Оберіть, хто з людей у боті — цей менеджер. Його записи й агенти перейдуть до нього, а сам він отримає доступ до міста.</p>
+      ${(c.managers||[]).map(m=>`<div class="trow"><span style="color:${esc(m.color||'')}"><b>${esc(m.name)}</b>${m.active===false?' <span class="muted">(не працює)</span>':''}</span>
+        <select style="width:auto;min-width:150px" onchange="linkMgr('${esc(c.id)}',${js(m.name)},this.value)"><option value="">— не прив’язаний —</option>
+        ${users.map(u=>`<option value="${u.tg_id}"${Number(m.tg_id)===u.tg_id?' selected':''}>${uname(u)}</option>`).join('')}</select></div>`).join('')}
+    </details>`).join('')}
     <details class="qs-more"><summary>Нове місто</summary>
       <div class="row" style="margin-top:8px"><div><label>Місто</label><select id="nc-pick" onchange="$('nc-other').style.display=this.value==='?'?'':'none'">
         ${UA_CITIES.filter(c=>!cities.some(x=>x.id===c[1]||x.name===c[0])).map(c=>`<option value="${c[1]}">${c[0]}</option>`).join('')}
@@ -2247,6 +2351,10 @@ function renderAdmin(){
         <div><label>Від</label><select id="tr-from">${users.map(u=>`<option value="${u.tg_id}">${uname(u)}</option>`).join('')}</select></div>
         <div><label>Кому</label><select id="tr-to">${users.map(u=>`<option value="${u.tg_id}">${uname(u)}</option>`).join('')}</select></div></div>
       <button onclick="transferOwner()">Передати</button></details>`;
+}
+async function linkMgr(city,name,tg){
+  if(!await ask(tg?`Прив’язати «${name}» до цієї людини? Усі його записи й агенти в місті перейдуть до неї.`:`Відв’язати «${name}»? Його записи повернуться адміністратору.`)){renderAdmin();return}
+  try{ADM=await api('admin',{op:'link_manager',city,name,tg_id:tg?Number(tg):null});renderAdmin();toast('Прив’язано');if(city===CITY)srvLoad(true)}catch(e){alert(e.message)}
 }
 async function setMember(city,tg,role){try{ADM=await api('admin',{op:'set_member',city,tg_id:tg,role});toast('Доступ оновлено')}catch(e){alert(e.message)}}
 const UA_CITIES=[['Київ','kyiv',50.4501,30.5234],['Львів','lviv',49.8397,24.0297],['Одеса','odesa',46.4825,30.7233],['Вінниця','vinnytsia',49.2331,28.4682],
@@ -2276,7 +2384,7 @@ async function adminImport(){
   let data;try{data=JSON.parse($('im-json').value)}catch(e){alert('Це не JSON');return}
   const city=$('im-city').value,owner=Number($('im-owner').value);
   if(!await ask(`Імпортувати в «${city}»: квадратів ${(data.quadrants||[]).length}, записів ${(data.records||[]).length}, агентів ${(data.agents||[]).length}?`))return;
-  try{const r=await api('admin',{op:'import',city,owner,data:norm(data)});toast(`Імпортовано: ${r.imported.records} записів`);if(city===CITY)srvLoad(true)}catch(e){alert(e.message)}
+  try{const r=await api('admin',{op:'import',city,owner,data});toast(`Імпортовано: ${r.imported.records} записів`);if(city===CITY)srvLoad(true)}catch(e){alert(e.message)}
 }
 async function transferOwner(){
   const city=$('tr-city').value,from=Number($('tr-from').value),to=Number($('tr-to').value);if(from===to)return;
@@ -2288,6 +2396,7 @@ function moreOpen(){
   $('dlg-body').innerHTML=`<h2 id="dlg-title">Ще</h2><div class="morelist">
     <button onclick="goTab('tiles')">▦ Реєстр територій</button>
     <button onclick="goTab('forecast')">◔ Прогноз</button>
+    <button onclick="goTab('perf')">₴ Результативність</button>
     <button onclick="reportDlg()">▤ Звіт за місяць</button>
     ${SRV&&IS_ADMIN?'<button onclick="adminDlg()">👥 Доступи й міста</button>':''}
     ${SRV&&CITIES.length>1?'<button onclick="cityDlg()">⇄ Інше місто</button>':''}
