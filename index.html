@@ -1,0 +1,2356 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F1EADC">
+<title>Квадрати · облік територій</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Commissioner:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link id="lcss" rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      onerror="this.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css'">
+<style>
+:root{--hdr:rgba(241,234,220,.93);--bar:rgba(251,247,239,.97);--lab:rgba(251,247,239,.94);--fieldfocus:#fff;
+  --wr:#7d2a12;--wy:#6b4e08;--wg:#1e4a2e;--btnbg:#fff}
+html.dark{
+  --paper:#14171C; --paper2:#1C2027; --card:#1A1E24;
+  --ink:#ECE6D9; --ink2:#AAB1BC; --ink3:#848B95; --rule:#2C323B;
+  --acc:#E0603A; --busy:#6FA3D6; --free:#5FB07D; --soon:#D2A23A; --block:#E06A47; --none:#9A968C;
+  --hdr:rgba(20,23,28,.93);--bar:rgba(26,30,36,.97);--lab:rgba(26,30,36,.92);--fieldfocus:#222730;
+  --wr:#F2A58C;--wy:#E8C878;--wg:#9AD3AE;--btnbg:#262B33;color-scheme:dark}
+html.dark body::before{opacity:.02}
+html.dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.7)}
+html.dark .leaflet-container{background:#1C2027}
+html.dark .leaflet-bar a,html.dark .leaflet-control-attribution{background:#262B33!important;color:#ECE6D9!important;border-color:#2C323B!important}
+html.dark .stamp{background:transparent}
+:root{
+  --paper:#F1EADC; --paper2:#E8DFCC; --card:#FBF7EF;
+  --ink:#1B2028; --ink2:#4A5260; --ink3:#6B675C;
+  --rule:#C9BFA8;
+  --acc:#C1401D;              /* вермільйон — тривога / активність */
+  --busy:#24527A; --free:#2E6B43; --soon:#7E5C0A; --block:#B03818; --none:#6B675C;
+  --disp:'Unbounded',Georgia,serif;
+  --body:'Commissioner',-apple-system,Segoe UI,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);color:var(--ink);font:400 14.5px/1.5 var(--body);
+  background-image:
+    linear-gradient(var(--rule) .5px,transparent .5px),
+    linear-gradient(90deg,var(--rule) .5px,transparent .5px);
+  background-size:64px 64px,64px 64px;
+  background-position:-1px -1px;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.045;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── шапка ───────────────────────────────── */
+header{
+  position:sticky;top:0;z-index:900;background:var(--hdr);
+  backdrop-filter:blur(8px);border-bottom:1.5px solid var(--ink);
+  padding:14px 26px 0;
+}
+.brand{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.eyebrow{font:500 9.5px/1 var(--mono);letter-spacing:.28em;text-transform:uppercase;color:var(--acc)}
+h1{font:800 21px/1 var(--disp);letter-spacing:-.02em;margin:0}
+.datestamp{margin-left:auto;font:500 11px/1 var(--mono);letter-spacing:.1em;color:var(--ink2);
+  border:1.2px solid var(--ink2);padding:5px 9px}
+nav{display:flex;gap:2px;margin-top:12px;flex-wrap:wrap}
+.tab{
+  font:600 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+  padding:10px 15px;cursor:pointer;color:var(--ink2);border:1.2px solid transparent;border-bottom:none;
+  background:transparent;transition:.15s;
+}
+.tab:hover{color:var(--ink);background:var(--paper2)}
+.tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+main{padding:26px;max-width:1580px;margin:0 auto}
+.view{display:none;animation:rise .35s ease both}
+.view.on{display:block}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}}
+
+/* ── типові блоки ────────────────────────── */
+.panel{background:var(--card);border:1.2px solid var(--ink);padding:20px;margin-bottom:20px;box-shadow:4px 4px 0 rgba(27,32,40,.09)}
+.panel h2{font:600 12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;margin:0 0 16px;
+  padding-bottom:9px;border-bottom:1px solid var(--rule);color:var(--ink)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:0;margin-bottom:22px;
+  border:1.2px solid var(--ink);background:var(--card)}
+.stat{padding:13px 16px;border-right:1px solid var(--rule)}
+.stat:last-child{border-right:none}
+.stat b{display:block;font:700 30px/1 var(--mono);letter-spacing:-.03em}
+.stat span{font:500 9.5px/1.3 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--ink2);display:block;margin-top:6px}
+
+.bar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+button{
+  font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  padding:9px 14px;border:1.2px solid var(--ink);background:var(--card);color:var(--ink);
+  cursor:pointer;transition:.13s
+}
+button:hover{background:var(--ink);color:var(--paper)}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}
+button.p:hover{background:var(--ink);border-color:var(--ink)}
+button.d{border-color:var(--acc);color:var(--acc);padding:6px 10px}
+button.d:hover{background:var(--acc);color:#fff}
+button.xs{padding:5px 9px;font-size:9.5px}
+label{display:block;font:500 9.5px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--ink2);margin-bottom:6px}
+input,select,textarea{
+  width:100%;padding:9px 11px;background:var(--paper);border:1.2px solid var(--rule);
+  color:var(--ink);font:400 14px/1.3 var(--body);transition:.13s
+}
+input:focus,select:focus{outline:none;border-color:var(--acc);background:var(--fieldfocus)}
+select{font-family:var(--mono);font-size:12px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px;margin-bottom:14px}
+
+/* ── штампи статусів ─────────────────────── */
+.stamp{display:inline-block;border:1.6px solid;padding:3px 8px;font:700 9.5px/1.2 var(--mono);
+  letter-spacing:.12em;text-transform:uppercase;transform:rotate(-2.5deg)}
+.s-free{color:var(--free);border-color:var(--free)}
+.s-soon{color:var(--soon);border-color:var(--soon)}
+.s-busy{color:var(--busy);border-color:var(--busy)}
+.s-block{color:var(--block);border-color:var(--block)}
+.s-none{color:var(--none);border-color:var(--none)}
+.t-free{color:var(--free)}.t-soon{color:var(--soon)}.t-busy{color:var(--busy)}
+.t-block{color:var(--block)}.t-none{color:var(--none)}
+
+/* ── плитки ──────────────────────────────── */
+.groupttl{display:flex;align-items:center;gap:12px;margin:26px 0 12px}
+.groupttl h3{font:600 13px/1 var(--disp);margin:0;letter-spacing:-.01em}
+.groupttl .ln{flex:1;height:1px;background:var(--rule)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(182px,1fr));gap:12px}
+.card{background:var(--card);border:1.2px solid var(--ink);border-left-width:6px;padding:12px 13px;cursor:pointer;
+  transition:transform .13s,box-shadow .13s;animation:rise .4s ease both}
+.card:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 rgba(27,32,40,.16)}
+.card .n{font:700 27px/1 var(--mono);letter-spacing:-.04em}
+.card .sub{font:400 11.5px/1.45 var(--body);color:var(--ink2);margin-top:9px}
+.card .sub b{font-family:var(--mono);font-weight:600}
+.b-free{border-left-color:var(--free)}.b-soon{border-left-color:var(--soon)}
+.b-busy{border-left-color:var(--busy)}.b-block{border-left-color:var(--block)}.b-none{border-left-color:var(--none)}
+.mini{display:flex;gap:3px;margin-top:9px;flex-wrap:wrap}
+.mini i{width:100%;max-width:26px;height:5px;display:block}
+
+/* ── таблиці ─────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font:600 9.5px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--ink2);
+  text-align:left;padding:8px 10px;border-bottom:1.4px solid var(--ink)}
+td{padding:9px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+tbody tr:hover td,tr:hover td{background:var(--paper2)}
+tr.dim td{opacity:.5}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px;margin-bottom:6px}
+.tcol{margin-bottom:0}
+.tcol .warn{font-size:12.5px}
+.trow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--rule);font-size:13px}
+.trow:last-child{border-bottom:none}
+td.num,.num{font-family:var(--mono);font-size:12.5px}
+.tag{display:inline-block;padding:2px 7px;border:1px solid var(--rule);background:var(--paper);
+  font:500 11px/1.3 var(--mono);margin:1px 3px 1px 0}
+.muted{color:var(--ink2);font-size:12.5px}
+.tree-in{color:var(--ink3);font-family:var(--mono)}
+
+/* ── повідомлення ────────────────────────── */
+.warn{padding:10px 13px;margin-bottom:8px;font-size:13px;border-left:4px solid;background:var(--card)}
+.w-red{border-color:var(--block);color:var(--wr)}
+.w-yel{border-color:var(--soon);color:var(--wy)}
+.w-grn{border-color:var(--free);color:var(--wg)}
+
+/* ── карта ───────────────────────────────── */
+.framed{position:relative;padding:9px;border:1.2px solid var(--ink);background:var(--card)}
+.framed::before,.framed::after{content:'';position:absolute;width:13px;height:13px;border:2px solid var(--acc);z-index:5}
+.framed::before{top:-2px;left:-2px;border-right:none;border-bottom:none}
+.framed::after{bottom:-2px;right:-2px;border-left:none;border-top:none}
+#map{height:66vh;min-height:430px;background:var(--paper2)}
+.leaflet-container{font-family:var(--body)}
+/* прибрати синю обвідку фокусу після кліку по квадрату */
+.leaflet-container :focus,.leaflet-interactive:focus,.leaflet-marker-icon:focus,
+.leaflet-container svg *:focus,.leaflet-container path:focus-visible{outline:none!important}
+.qlab{display:inline-block;background:var(--lab);color:var(--ink);font:700 11px/1 var(--mono);letter-spacing:-.02em;
+  padding:3px 5px 3px 4px;border-left:3px solid;box-shadow:0 1px 2px rgba(27,32,40,.25);white-space:nowrap;cursor:pointer;
+  transform:translate(-50%,-50%);position:absolute;left:0;top:0}
+.qlab.grp{background:var(--ink);color:var(--paper);border-left-color:var(--paper)!important;font-size:12px;padding:4px 7px}
+.qlab.grp small{font-weight:500;opacity:.7;margin-left:3px;font-size:9px}
+.qlab-wrap{width:0!important;height:0!important;background:none;border:none}
+#drawbox,#editbox{display:none;padding:11px 14px;background:var(--card);border:1.2px solid var(--acc);
+  border-left-width:5px;margin-bottom:14px}
+#drawbox.on,#editbox.on{display:flex;gap:11px;align-items:center;flex-wrap:wrap}
+#drawbox b,#editbox b{font:700 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.vh{width:13px;height:13px;background:#fff;border:2px solid var(--acc);box-shadow:0 0 3px rgba(0,0,0,.5);cursor:move}
+.vm{width:11px;height:11px;background:rgba(255,255,255,.7);border:1.5px dashed var(--busy);border-radius:50%;cursor:copy}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin:0 0 14px;font:500 10px/1 var(--mono);
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+.legend i{display:inline-block;width:16px;height:8px;margin-right:6px;vertical-align:-1px}
+
+dialog{background:var(--card);color:var(--ink);border:1.5px solid var(--ink);padding:24px;
+  max-width:660px;width:93%;max-height:84vh;box-shadow:8px 8px 0 rgba(27,32,40,.2)}
+dialog::backdrop{background:rgba(27,32,40,.5)}
+dialog h2{font:800 20px/1 var(--disp);margin:0 0 6px;letter-spacing:-.02em}
+/* клавіатурний фокус видно всюди, крім карти */
+button:focus-visible,select:focus-visible,input:focus-visible,.card:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+/* iPad / телефон: більші цілі дотику, вкладки прокручуються */
+@media (max-width:900px){
+  main{padding:14px}
+  header{padding:10px 14px 0}
+  nav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tab{padding:13px 16px;white-space:nowrap;flex:0 0 auto}
+  button{min-height:42px;padding:11px 15px}
+  button.xs{min-height:38px;padding:9px 12px}
+  button.d{min-height:38px;min-width:40px}
+  input,select,textarea{min-height:44px;font-size:16px}
+  .row{grid-template-columns:1fr}
+  .tgrid{grid-template-columns:1fr}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  #map{height:58vh;min-height:360px}
+  .stat b{font-size:24px}
+  table{font-size:13px}
+  th,td{padding:8px 6px}
+  dialog{width:96%;padding:16px;max-height:90vh;overflow:auto}
+}
+/* Telegram */
+.cloud{font:500 11px/1 var(--mono);letter-spacing:.06em;color:var(--ink3);margin-left:auto}
+.cloud.c-err{color:var(--acc)} .cloud.c-ok{color:var(--free)}
+body.in-tg .only-file{display:none!important}
+body.no-tg .only-tg{display:none!important}
+body.in-tg header{padding-top:max(10px,env(safe-area-inset-top))}
+body.in-tg main{padding-bottom:calc(26px + env(safe-area-inset-bottom))}
+#bnav,.only-m{display:none}
+#toast{position:fixed;right:20px;bottom:20px;z-index:2000;max-width:420px;display:flex;gap:12px;align-items:center;
+  background:var(--ink);color:var(--paper);padding:11px 14px;font:600 12px/1.3 var(--mono);box-shadow:0 6px 18px rgba(0,0,0,.25);
+  opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none}
+#toast.on{opacity:1;transform:none}
+#toast.act{pointer-events:auto}
+#toast button{background:none;border:1.2px solid var(--paper);color:var(--paper);padding:6px 10px;font-size:10px;white-space:nowrap;min-height:0}
+.legend span{cursor:pointer;user-select:none;-webkit-user-select:none}
+.legend span.off{opacity:.35;text-decoration:line-through}
+.qs-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.qs-head h2{margin:0}
+.qs-sub{margin:6px 0 12px;font-size:12.5px}
+.qs-act{margin-bottom:12px}
+.qs-lbl{font:600 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);margin-bottom:8px}
+button.big{width:100%;min-height:48px;font-size:12px}
+.chip.bad{border-color:var(--rule);color:var(--ink3)}
+.chip .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.qs-more{border-top:1px solid var(--rule);padding:10px 0 2px}
+.qs-more summary{font:600 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);cursor:pointer;padding:4px 0}
+.hrow{display:grid;grid-template-columns:44px 1fr;gap:2px 10px;padding:8px 0;border-bottom:1px solid var(--rule);font-size:13px}
+.hrow>*:nth-child(n+3){grid-column:2}
+.stat em{font-style:normal}
+.prow{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.prow .pt{flex:1;min-width:0} .prow .pq{font-size:15px;margin-right:6px} .prow .pd{font-size:12px;margin-top:3px}
+.prow button{flex:0 0 auto}
+.morelist{display:grid;gap:8px;margin-top:12px} .morelist button{text-align:left;padding:14px;font-size:12px}
+
+@media (max-width:700px){
+  body{font-size:15px;background-size:48px 48px,48px 48px}
+  header{padding:8px 14px;border-bottom-width:1px}
+  .eyebrow,header nav{display:none}
+  .brand{align-items:center;gap:10px;flex-wrap:nowrap}
+  .brand h1{font-size:17px}
+  body.in-tg .brand h1{display:none}           /* назву вже показує Telegram */
+  .datestamp{margin-left:0;padding:4px 7px;font-size:10.5px}
+  .cloud{font-size:10.5px}
+  main{padding:10px 10px calc(78px + env(safe-area-inset-bottom))}
+  .panel{padding:14px;margin-bottom:12px;box-shadow:none}
+  /* нижня навігація */
+  #bnav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:950;
+    background:var(--bar);backdrop-filter:blur(8px);border-top:1.5px solid var(--ink);
+    padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+  #bnav button{border:none;background:none;min-height:52px;padding:6px 2px;display:flex;flex-direction:column;
+    align-items:center;gap:3px;font:600 9.5px/1 var(--mono);letter-spacing:.06em;color:var(--ink2)}
+  #bnav button i{font-style:normal;font-size:18px;line-height:1}
+  #bnav button.on{color:var(--acc)}
+  #bnav button:hover{background:none;color:var(--ink)}
+  .only-m{display:inline-flex}
+  /* головна: статистика в один рядок */
+  #v-map.on{display:flex;flex-direction:column}
+  #v-map .stats{order:-1;grid-template-columns:repeat(5,1fr)!important;margin-bottom:10px}
+  .stat{padding:8px 4px!important;text-align:center}
+  .stat b{font-size:19px!important}
+  .stat span{font-size:8.5px!important;letter-spacing:.04em!important;margin-top:4px}
+  .stat em{display:none}
+  /* у роботі */
+  .mcard{background:var(--card);border:1.2px solid var(--ink);padding:10px 12px;margin-bottom:10px}
+  .mhead,.matt summary{display:flex;justify-content:space-between;align-items:center;
+    font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;padding:2px 0 8px}
+  .mhead .num,.matt summary .num{background:var(--ink);color:var(--paper);padding:3px 8px;font-size:11px}
+  .matt summary{list-style:none;cursor:pointer;padding:2px 0}
+  .matt summary::-webkit-details-marker{display:none}
+  .matt summary b::before{content:'▸ ';color:var(--soon)} .matt[open] summary b::before{content:'▾ '}
+  .matt[open] summary{padding-bottom:8px}
+  .matt summary .num{background:var(--soon)}
+  .matt .warn{font-size:13px;padding:8px 10px}
+  .mrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--rule)}
+  .mq{font:700 17px/1 var(--mono);min-width:44px}
+  .mq small{font-size:10px;color:var(--ink2);font-weight:500}
+  .mw{flex:1;min-width:0;font-size:14px;line-height:1.25;overflow:hidden;text-overflow:ellipsis}
+  .mw small{display:block;color:var(--ink2);font:500 11px/1.3 var(--mono);margin-top:3px}
+  .mw .gone{text-decoration:line-through;color:var(--ink3)}
+  .mrow button{min-height:40px;padding:8px 10px}
+  .mgo{width:100%;margin-top:10px;min-height:46px;font-size:12px}
+  /* карта */
+  .mapbar{gap:6px;margin-bottom:8px}
+  .mapbar select#tilesrc{flex:1;min-width:0}
+  .edtool{display:none!important}
+  body.m-edit .edtool{display:inline-flex!important}
+  body.m-edit select.edtool{display:block!important;width:100%!important}
+  #ed-toggle.on{background:var(--ink);color:var(--paper)}
+  .legend{gap:10px;font-size:9px;margin-bottom:8px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap}
+  .legend i{width:10px;height:7px;margin-right:4px}
+  .framed{padding:0;border:none} .framed::before,.framed::after{display:none}
+  #map{height:56vh;min-height:240px!important;border:1.2px solid var(--ink)}
+  #backupbar .warn{font-size:12.5px;padding:8px 10px}
+  /* планувальник */
+  .prow{padding:7px 10px;margin-bottom:6px}
+  .prow .pq{font-size:14px} .prow .pd{font-size:11.5px;margin-top:1px}
+  .prow button{min-height:34px}
+  /* загальне */
+  .bar{gap:6px}
+  dialog{width:100%!important;max-width:100%!important;margin:auto 0 0;max-height:88vh!important;padding:16px 14px calc(16px + env(safe-area-inset-bottom))!important;
+    border-width:1.5px 0 0;box-shadow:none}
+  dialog h2{font-size:18px}
+  #toast{left:12px;right:12px;max-width:none;bottom:calc(76px + env(safe-area-inset-bottom));justify-content:space-between}
+  body.kb #bnav{display:none!important}
+  body.kb main{padding-bottom:20px}
+  body.map-full #toast{bottom:calc(20px + env(safe-area-inset-bottom))}
+  /* компактніше: менше висоти зверху, більше карти */
+  button{min-height:36px;padding:8px 11px}
+  button.xs{min-height:32px;padding:6px 9px;font-size:9.5px}
+  input,select,textarea{min-height:38px}
+  #v-map .stats{margin-bottom:8px}
+  .stat{padding:5px 2px!important}
+  .stat b{font-size:16px!important}
+  .stat span{font-size:8px!important;margin-top:2px}
+  .mcard{padding:6px 10px;margin-bottom:8px}
+  .mhead{padding:2px 0 4px;font-size:10px}
+  .mhead .mgo{width:auto;margin:0;min-height:30px;padding:6px 12px;font-size:10px}
+  .mrow{padding:5px 0;gap:8px}
+  .mq{font-size:14px;min-width:36px}
+  .mw{font-size:13px}
+  .mw small{font-size:10px;margin-top:1px}
+  .mrow button{min-height:30px;padding:5px 8px;font-size:9px}
+  .mapbar{margin-bottom:6px}
+  .mapbar button,.mapbar select{min-height:34px;font-size:11px}
+  .legend{margin-bottom:6px}
+  .mhead .matt-btn{margin-left:auto;margin-right:6px;min-height:30px;padding:6px 10px;font-size:10px;border-color:var(--soon);color:var(--soon)}
+}
+/* чіпи, картки */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:600 11px/1 var(--mono);letter-spacing:.04em;text-transform:none;padding:8px 11px;border:1.2px solid var(--ink);background:var(--card)}
+.chip.on{background:var(--ink);color:var(--paper)}
+.chip i{font-style:normal;background:var(--busy);color:#fff;padding:1px 5px;margin-left:4px;font-size:10px}
+#p-chips{margin-bottom:12px}
+.only-mb{display:none}
+@media (max-width:700px){
+  .only-d{display:none!important}
+  .only-mb{display:block}
+  /* форми: без системного iOS-стилю, без вилазання за край */
+  input,select,textarea{-webkit-appearance:none;appearance:none;border-radius:0;min-width:0;max-width:100%;display:block;font-size:16px}
+  input[type=file],[hidden]{display:none!important}
+  input[type=checkbox]{-webkit-appearance:auto;appearance:auto;display:inline-block;width:20px!important;height:20px!important;min-height:0!important;flex:0 0 auto}
+  input[type=date]{text-align:left;line-height:1.2}
+  input[type=date]::-webkit-date-and-time-value{text-align:left}
+  select{padding-right:30px;background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%231B2028'/%3E%3C/svg%3E") no-repeat right 11px center}
+  label{margin-bottom:4px;font-size:9px}
+  .row{gap:8px;margin-bottom:10px}
+  .row.r3{grid-template-columns:1fr 1fr}
+  .row.r3>div:first-child{grid-column:1/-1}
+  .panel h2{margin-bottom:10px;font-size:11px}
+  .panel label[style]{font-size:13px!important}
+  /* згорнуті панелі */
+  .panel.fold>h2{cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+  .panel.fold>h2::after{content:'＋';font-size:15px;color:var(--acc)}
+  .panel.fold.open>h2::after{content:'－'}
+  .panel.fold:not(.open)>*:not(h2){display:none!important}
+  .panel.fold:not(.open)>h2{margin:0;padding:0;border:none}
+  .panel.fold:not(.open){padding:12px 14px}
+  /* журнал */
+  #v-hist .bar{flex-wrap:nowrap} #q-search{width:auto!important;flex:1}
+  .jrow{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--rule)}
+  .jq{font:700 15px/1.2 var(--mono);min-width:42px}
+  .jm{flex:1;min-width:0}
+  .jd{font:500 11.5px/1.35 var(--mono);color:var(--ink2)}
+  .ja{font-size:14px;margin-top:2px}
+  .jn{font-size:12px;color:var(--ink2);margin-top:2px}
+  .jb{display:flex;gap:6px}
+  .jb button{min-height:32px!important;min-width:34px;padding:4px 8px!important}
+  /* агенти */
+  .acard{padding:10px 0;border-top:1px solid var(--rule)}
+  .acard.dim{opacity:.6}
+  .ah{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ah b{font-size:15px}
+  .ah .stamp{margin-left:auto;font-size:8.5px;padding:2px 6px}
+  .ai{font-size:13px;margin:4px 0}
+  .aq summary{font:500 11px/1.4 var(--mono);color:var(--ink2);cursor:pointer;margin:2px 0 6px}
+  .aq .tag{margin:0}
+  .ab{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .ab button{min-height:30px!important;padding:5px 9px!important;font-size:9px}
+  /* планувальник */
+  .p-agent-box{display:none}
+  .prow-sel{margin-bottom:8px}
+  .chip{padding:9px 11px;min-height:0}
+}
+/* спільна версія */
+body.srv [data-nosrv]{display:none!important}
+.citybtn{margin-left:auto;background:var(--ink);color:var(--paper);border-color:var(--ink);padding:5px 10px;min-height:0!important;font-size:10.5px}
+.citybtn+.cloud{margin-left:10px}
+.tag.own{border-color:var(--busy);color:var(--busy)}
+#gate{position:fixed;inset:0;z-index:3000;background:var(--paper);display:flex;align-items:center;justify-content:center;padding:24px}
+.gate-box{max-width:420px;background:var(--card);border:1.2px solid var(--ink);padding:22px}
+.gate-box h2{font:800 20px/1.1 var(--disp);margin:0 0 10px}
+.adm-u{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;padding:10px 0;border-top:1px solid var(--rule)}
+.adm-roles{display:flex;flex-wrap:wrap;gap:8px}
+.adm-roles label{display:flex;flex-direction:column;gap:3px;margin:0;font-size:9px}
+.adm-roles select{min-width:120px;width:auto}
+.gone-box{border-top:1px solid var(--rule);margin-top:6px;padding-top:8px}
+.gone-box summary{font:600 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);cursor:pointer;padding:6px 0}
+.mall{width:100%;margin-top:6px;min-height:34px!important;justify-content:center}
+.mgo-arrow{font-size:22px;color:var(--ink3);padding:0 4px}
+.wgrp{border-top:1px solid var(--rule);padding:6px 0}
+.wgrp summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:6px 0;font-size:15px;list-style:none}
+.wgrp summary::-webkit-details-marker{display:none}
+.wgrp summary .num{background:var(--busy);color:#fff;padding:2px 8px;font-size:11px}
+.wgrp .mrow{padding:6px 0 6px 8px}
+/* карта на весь екран */
+.fsbtn{width:34px;height:34px;line-height:32px!important;text-align:center;font-size:18px;background:var(--btnbg);color:var(--ink)!important;
+  text-decoration:none;cursor:pointer}
+body.map-full{overflow:hidden}
+body.map-full .view,body.map-full main{animation:none!important;transform:none!important;filter:none!important}
+body.map-full .framed{position:fixed!important;inset:0;z-index:1000;padding:0!important;border:none!important;background:var(--paper2)}
+body.map-full .framed::before,body.map-full .framed::after{display:none}
+body.map-full #map{height:100%!important;min-height:0!important;border:none!important}
+body.map-full #bnav,body.map-full header{visibility:hidden}
+body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size:20px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="eyebrow">Контроль територій</span>
+    <h1>КВАДРАТИ</h1>
+    <span class="datestamp" id="today"></span>
+    <button class="citybtn" id="citybtn" onclick="cityDlg()" style="display:none"></button>
+    <span class="cloud" id="cloud" aria-live="polite"></span>
+  </div>
+  <nav role="tablist" aria-label="Розділи">
+    <button class="tab on" data-v="map" role="tab" aria-selected="true">Карта</button>
+    <button class="tab" data-v="tiles" role="tab" aria-selected="false">Реєстр</button>
+    <button class="tab" data-v="plan" role="tab" aria-selected="false">Планувальник</button>
+    <button class="tab" data-v="forecast" role="tab" aria-selected="false">Прогноз</button>
+    <button class="tab" data-v="hist" role="tab" aria-selected="false">Історія</button>
+    <button class="tab" data-v="agents" role="tab" aria-selected="false">Агенти</button>
+    <button class="tab" data-v="set" role="tab" aria-selected="false">Налаштування</button>
+  </nav>
+</header>
+
+<main>
+<div id="fatal" role="alert"></div>
+<div id="backupbar"></div>
+
+<!-- ═══ КАРТА ═══ -->
+<div class="view on" id="v-map">
+  <div id="today-panel"></div>
+  <div class="stats" id="stats"></div>
+  <div class="bar mapbar">
+    <select id="m-draw-q" class="edtool" style="width:auto;min-width:200px"></select>
+    <button class="edtool" onclick="startDraw()">✏ Обвести</button>
+    <button class="edtool" onclick="startEdit()">✎ Межі</button>
+    <button class="edtool" onclick="renameQ()">Аа Перейм.</button>
+    <button class="edtool" onclick="addSub()">+ Підквадрат</button>
+    <button class="edtool" onclick="goAddQ()">+ Квадрат</button>
+    <button class="d edtool" onclick="delQ()">Видалити</button>
+    <button class="edtool" onclick="document.getElementById('geo-in').click()">↧ GeoJSON/KML</button>
+    <input type="file" id="geo-in" accept=".json,.geojson,.kml" hidden onchange="impGeo(event)">
+    <button onclick="fitAll()">⤢ Усі</button>
+    <select id="tilesrc" style="width:auto" aria-label="Підложка карти" onchange="setTiles(this.value)">
+      <option value="0">Карта: OpenStreetMap</option>
+      <option value="1">Карта: вулиці Esri</option>
+      <option value="2">Карта: детальна</option>
+      <option value="3">Карта: супутник+вулиці</option>
+      <option value="4">Карта: супутник</option>
+    </select>
+    <button class="only-m" id="ed-toggle" onclick="document.body.classList.toggle('m-edit');this.classList.toggle('on')">✎ Межі</button>
+    <span class="muted num edtool" id="geo-count" style="margin-left:auto"></span>
+  </div>
+  <div id="drawbox">
+    <b id="draw-title"></b>
+    <span class="muted">Клікайте кути. Замикати не треба.</span>
+    <span id="draw-n" class="muted num"></span>
+    <button class="p" onclick="finishDraw()">Готово</button>
+    <button onclick="undoPt()">Крок назад</button>
+    <button onclick="cancelDraw()">Скасувати</button>
+  </div>
+  <div id="editbox">
+    <b id="edit-title"></b>
+    <span class="muted">Тягніть кути. Клік по кружечку — нова точка. Подвійний клік (тап) або Alt+клік по куту — прибрати.</span>
+    <button class="p" onclick="finishEdit()">Зберегти</button>
+    <button onclick="cancelEdit()">Скасувати</button>
+  </div>
+  <div class="legend" title="Натисніть, щоб сховати / показати">
+    <span data-s="busy" onclick="toggleLeg('busy')"><i style="background:var(--busy)"></i>В роботі</span>
+    <span data-s="free" onclick="toggleLeg('free')"><i style="background:var(--free)"></i>Готовий</span>
+    <span data-s="soon" onclick="toggleLeg('soon')"><i style="background:var(--soon)"></i>Умовно</span>
+    <span data-s="block" onclick="toggleLeg('block')"><i style="background:var(--block);opacity:.45"></i>Зарано</span>
+    <span data-s="none" onclick="toggleLeg('none')" title="Пройдено в минулому колі або записів ще немає"><i style="background:var(--none);opacity:.45"></i>Без записів</span>
+  </div>
+  <div id="mapmsg"></div>
+  <div class="framed"><div id="map"><div style="padding:44px;text-align:center;color:var(--ink3);font-family:var(--mono);font-size:12px">ЗАВАНТАЖЕННЯ КАРТИ…</div></div></div>
+</div>
+
+<!-- ═══ РЕЄСТР ═══ -->
+<div class="view" id="v-tiles"><div id="reg"></div></div>
+
+<!-- ═══ ПЛАНУВАЛЬНИК ═══ -->
+<div class="view" id="v-plan">
+  <div class="panel">
+    <h2>Кого куди ставити</h2>
+    <div id="p-chips" class="chips"></div>
+    <div class="row prow-sel"><div class="p-agent-box"><label>Агент</label><select id="p-agent"></select></div>
+      <div><label>Порядок</label><select id="p-sort" onchange="plan()">
+        <option value="near">Спершу найближчі</option>
+        <option value="rest">Спершу найдовше відпочивали</option></select></div></div>
+    <div id="p-out"></div>
+  </div>
+</div>
+
+<!-- ═══ ПРОГНОЗ ═══ -->
+<div class="view" id="v-forecast">
+  <div id="fc-warn"></div>
+  <div class="panel"><h2>Коли території дозріють</h2><div style="overflow:auto"><table id="fc-tbl"></table></div>
+    <p class="muted">Дати рахуються від останнього закриття запису: «Мін.» — за мінімальним відпочинком з налаштувань, «Ідеал» — за ідеальним.</p></div>
+</div>
+
+<!-- ═══ ІСТОРІЯ ═══ -->
+<div class="view" id="v-hist">
+  <div class="panel fold" id="f-panel">
+    <h2>Запис опрацювання</h2>
+    <div class="row r3">
+      <div><label>Квадрат</label><select id="f-q"></select></div>
+      <div><label>Початок</label><input type="date" id="f-s"></div>
+      <div><label>Кінець · якщо закінчив</label><input type="date" id="f-e"></div>
+    </div>
+    <div id="f-allbox" style="display:none;margin:-4px 0 14px">
+      <label style="display:flex;align-items:center;gap:9px;cursor:pointer;text-transform:none;letter-spacing:0;
+                    font:500 13px/1.3 var(--body);color:var(--ink);border:1.2px dashed var(--acc);padding:10px 12px">
+        <input type="checkbox" id="f-all" style="width:16px;height:16px;margin:0;accent-color:var(--acc)">
+        <span id="f-all-txt"></span>
+      </label>
+    </div>
+    <div class="row">
+      <div><label>Агенти через кому</label><input id="f-a" placeholder="наприклад: 467, 456">
+        <div id="f-achips" style="margin-top:7px"></div></div>
+      <div><label>Примітка · вулиці</label><input id="f-note" placeholder="крім Боян"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:9px;cursor:pointer;text-transform:none;letter-spacing:0;
+                  font:500 13px/1.3 var(--body);color:var(--ink);margin:0 0 12px">
+      <input type="checkbox" id="f-part" style="width:16px;height:16px;margin:0;accent-color:var(--acc)">
+      <span>Частковий день <span class="muted">— напр. паралельно з іншим квадратом; не рахується у швидкості</span></span>
+    </label>
+    <div id="f-warn"></div>
+    <div class="bar" style="margin:0">
+      <button class="p" id="btn-rec" onclick="addRec()">Додати</button>
+      <button id="btn-cancel" style="display:none" onclick="resetForm()">Скасувати</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="bar"><h2 style="margin:0;border:none;padding:0">Журнал</h2>
+      <input id="q-search" placeholder="пошук…" style="width:220px;margin-left:auto"></div>
+    <div style="overflow:auto" class="only-d"><table id="tbl"></table></div>
+    <div id="jlist" class="only-mb"></div>
+  </div>
+</div>
+
+<!-- ═══ АГЕНТИ ═══ -->
+<div class="view" id="v-agents">
+  <div class="panel fold">
+    <h2>Новий агент</h2>
+    <div class="row">
+      <div><label>Ім'я / ІД</label><input id="a-name" placeholder=""></div>
+      <div><label>Дата початку роботи · необов'язково</label><input type="date" id="a-start"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:9px;cursor:pointer;text-transform:none;letter-spacing:0;
+                  font:500 13px/1.3 var(--body);color:var(--ink);margin-bottom:14px">
+      <input type="checkbox" id="a-left" style="width:16px;height:16px;margin:0;accent-color:var(--acc)">
+      Уже не працює (потрібен лише для історії — його не пропонуватимуть)
+    </label>
+    <label style="display:flex;align-items:center;gap:9px;cursor:pointer;text-transform:none;letter-spacing:0;
+                  font:500 13px/1.3 var(--body);color:var(--ink);margin:-4px 0 14px">
+      <input type="checkbox" id="a-trainee" style="width:16px;height:16px;margin:0;accent-color:var(--acc)">
+      Стажер (у статистиці швидкості рахується окремо від наставника)
+    </label>
+    <button class="p" onclick="addAgent()">Додати</button>
+  </div>
+  <div id="dupbox"></div>
+  <div class="panel"><h2>Склад</h2><div style="overflow:auto" class="only-d"><table id="a-tbl"></table></div><div id="a-list" class="only-mb"></div></div>
+  <div class="panel"><h2>Швидкість проходу</h2><div id="speed" style="overflow:auto"></div></div>
+</div>
+
+<!-- ═══ НАЛАШТУВАННЯ ═══ -->
+<div class="view" id="v-set">
+  <div class="panel">
+    <h2>Вигляд</h2>
+    <div class="row"><div><label>Тема</label><select id="s-theme" onchange="setTheme(this.value)">
+      <option value="auto">Як у телефоні / Telegram</option><option value="light">Світла</option><option value="dark">Темна</option></select></div></div>
+  </div>
+  <div class="panel">
+    <h2>Правила</h2>
+    <div class="row">
+      <div><label>Ідеальний відпочинок, міс</label><input type="number" id="s-ideal" value="12"></div>
+      <div><label>Мінімальний відпочинок, міс</label><input type="number" id="s-min" value="9"></div>
+    </div>
+    <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;text-transform:none;letter-spacing:0;
+                  font:500 13px/1.4 var(--body);color:var(--ink);margin:2px 0 14px">
+      <input type="checkbox" id="s-repeat" style="width:16px;height:16px;margin:2px 0 0;accent-color:var(--acc)">
+      <span>Агент не повертається на територію, де вже працював.<br>
+      <span class="muted">Діє для всіх агентів, без огляду на стаж. Система не пропонує такі квадрати й попереджає при внесенні запису.</span></span>
+    </label>
+    <button class="p" onclick="saveSet()">Зберегти</button>
+  </div>
+  <div class="panel">
+    <h2>Структура територій</h2>
+    <div class="bar">
+      <input id="s-newq" placeholder="22, 23, 24  або  22-26  або  Сторожинець" style="width:340px"
+             onkeydown="if(event.key==='Enter')addQ()">
+      <button class="p" onclick="addQ()">+ Додати</button>
+      <button onclick="sortQ()">Сортувати</button>
+      <span class="muted">Підквадрат наслідує номер батька: 8 → 8.1, 8.2. Перейменування переносить усю історію.</span>
+    </div>
+    <div id="q-added"></div>
+    <div style="overflow:auto"><table id="q-tbl"></table></div>
+  </div>
+  <div class="panel">
+    <h2>Дані</h2>
+    <div class="bar">
+      <button onclick="TG?expText():exp()">↥ Експорт усього</button>
+      <button data-nosrv onclick="document.getElementById('imp').click()">↧ Імпорт файлу</button>
+      <button data-nosrv onclick="impTextDlg()">⎘ Вставити дані</button>
+      <button class="only-tg" data-nosrv onclick="backupsDlg()">☁ Резервні копії</button>
+      <input type="file" id="imp" accept=".json" hidden onchange="impF(event)">
+      <button data-nosrv onclick="restorePrev()" title="Повернути дані до останнього імпорту">↺ Відновити попередні</button>
+      <button class="only-file" onclick="expGeo()">↥ Контури GeoJSON</button>
+      <button class="only-file" onclick="expCsv()">↥ CSV</button>
+      <button class="d" data-nosrv onclick="clearAll()">Очистити все</button>
+    </div>
+    <p class="muted only-file">Дані живуть у цьому браузері. Експорт — ваша резервна копія.</p>
+    <p class="muted only-tg">Дані зберігаються в хмарі Telegram і однакові на всіх ваших пристроях. Експорт потрібен лише як додаткова копія (раз на місяць).</p>
+  </div>
+</div>
+</main>
+
+<nav id="bnav" aria-label="Розділи">
+  <button data-b="map" onclick="goTab('map')"><i>◧</i>Карта</button>
+  <button data-b="plan" onclick="goTab('plan')"><i>▶</i>Видати</button>
+  <button data-b="hist" onclick="goTab('hist')"><i>☰</i>Історія</button>
+  <button data-b="agents" onclick="goTab('agents')"><i>◉</i>Агенти</button>
+  <button data-b="more" onclick="moreOpen()"><i>⋯</i>Ще</button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="dlg"><div id="dlg-body"></div><div class="bar" style="margin:18px 0 0"><button onclick="dlg.close()">Закрити</button></div></dialog>
+
+<script>
+const KEY='kvadraty_v2';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const js=s=>esc(JSON.stringify(String(s)));          // безпечно для onclick="f(${js(x)})"
+const clone=o=>JSON.parse(JSON.stringify(o));
+const DEF={settings:{ideal:12,min:9,tenure:6,repeat:true},
+  quadrants:["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21"],
+  agents:[],records:[],geo:{},view:{c:[48.2921,25.9358],z:12},tile:0,lastExport:''};
+
+/* ── допоміжне для перевірки вхідних даних ── */
+const ISO=/^\d{4}-\d{2}-\d{2}$/;
+function okDate(s){
+  if(typeof s!=='string'||!ISO.test(s))return false;
+  const [y,m,d]=s.split('-').map(Number),t=new Date(y,m-1,d);
+  return t.getFullYear()===y&&t.getMonth()===m-1&&t.getDate()===d;
+}
+const cut=(s,n)=>String(s).slice(0,n);
+const RESERVED=n=>n in {};                            // constructor, __proto__, toString …
+const num=v=>(v===null||v===''||typeof v==='boolean'||typeof v==='object')?NaN:Number(v);
+const normName=s=>String(s).toLowerCase().replace(/[ʼ'`’]/g,'')
+  .replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).sort().join(' ');
+const goodStr=s=>typeof s==='string'||typeof s==='number';
+
+/* ── нормалізація: будь-який JSON приводимо до безпечного вигляду ── */
+function norm(d){
+  d=(d&&typeof d==='object'&&!Array.isArray(d))?d:{};
+  const o=clone(DEF),arr=k=>Array.isArray(d[k])?d[k]:[];
+  const S=(d.settings&&typeof d.settings==='object')?d.settings:{},st=clone(DEF.settings);
+  ['ideal','min','tenure'].forEach(k=>{const v=num(S[k]);if(Number.isFinite(v)&&v>=0)st[k]=v});
+  if(st.min>st.ideal)st.min=st.ideal;
+  st.repeat=!(S.repeat===false||S.repeat==='false');
+  o.settings=st;
+  o.quadrants=Array.isArray(d.quadrants)
+    ?[...new Set(d.quadrants.filter(goodStr).map(x=>cut(String(x).trim(),40)).filter(x=>x&&!RESERVED(x)))]
+    :clone(DEF.quadrants);
+  o.agents=[];
+  arr('agents').forEach(a=>{
+    if(!a||typeof a!=='object'||!goodStr(a.name))return;
+    const name=cut(String(a.name).trim(),60);
+    if(!name||!normName(name)||RESERVED(name))return;
+    o.agents.push({name,start:okDate(a.start)?a.start:'',left:!!a.left,leftDate:okDate(a.leftDate)?a.leftDate:'',
+      trainee:!!a.trainee,traineeUntil:okDate(a.traineeUntil)?a.traineeUntil:''});
+  });
+  o.records=[];
+  arr('records').forEach(r=>{
+    if(!r||typeof r!=='object'||!goodStr(r.q)||!okDate(r.start))return;
+    const q=cut(String(r.q).trim(),40);if(!q||RESERVED(q))return;
+    let end=okDate(r.end)?r.end:null;if(end&&end<r.start)end=r.start;
+    const ags=Array.isArray(r.agents)?r.agents:(typeof r.agents==='string'?r.agents.split(','):(goodStr(r.agent)?[r.agent]:[]));
+    const rec={q,start:r.start,end,
+      agents:ags.filter(goodStr).map(x=>cut(String(x).trim(),60)).filter(x=>x&&normName(x)),
+      note:cut(r.note==null?'':r.note,500)};
+    if(typeof r.grp==='string'&&r.grp&&goodStr(r.src)){rec.grp=cut(r.grp,40);rec.src=cut(String(r.src),40)}
+    if(r.part)rec.part=true;
+    o.records.push(rec);
+  });
+  o.geo={};
+  const G=(d.geo&&typeof d.geo==='object'&&!Array.isArray(d.geo))?d.geo:{},qset=new Set(o.quadrants);
+  Object.keys(G).forEach(k=>{
+    if(!qset.has(k)||RESERVED(k)||!Array.isArray(G[k]))return;
+    const pts=G[k].map(p=>Array.isArray(p)?[num(p[0]),num(p[1])]:[NaN,NaN]);
+    if(pts.length<3||pts.some(p=>!isFinite(p[0])||!isFinite(p[1])||Math.abs(p[0])>90||Math.abs(p[1])>180))return;
+    o.geo[k]=pts;
+  });
+  const V=(d.view&&typeof d.view==='object')?d.view:{},c=Array.isArray(V.c)&&V.c.length===2?[num(V.c[0]),num(V.c[1])]:null,z=num(V.z);
+  o.view=(c&&isFinite(c[0])&&isFinite(c[1])&&Math.abs(c[0])<=90&&Math.abs(c[1])<=180&&z>=1&&z<=20)?{c,z}:clone(DEF.view);
+  o.tile=(Number.isInteger(d.tile)&&d.tile>=0&&d.tile<=4)?d.tile:0;
+  o.lastExport=okDate(d.lastExport)?d.lastExport:'';
+  o.savedAt=(Number.isFinite(d.savedAt)&&d.savedAt>0)?d.savedAt:0;
+  return o;
+}
+let lastRaw=null;
+let D=load();
+if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData){D=clone(DEF);D.quadrants=[]}
+function load(){
+  let raw=null;
+  try{raw=localStorage.getItem(KEY);if(raw){lastRaw=raw;return norm(JSON.parse(raw))}}
+  catch(e){try{if(raw)localStorage.setItem(KEY+'_broken',raw)}catch(_){}}   // зіпсовані дані не губимо
+  return clone(DEF);
+}
+let lastSaveWarn=0;
+function persist(){D.savedAt=Date.now();persistLocal();if(SRV){srvSave();return}if(cloudReady)cloudSave()}
+function persistView(){if(SRV){if(CITY)try{localStorage.setItem(viewKey(),JSON.stringify({c:D.view.c,z:D.view.z,t:D.tile}))}catch(_){}return}persistLocal()}            // вигляд карти / підложка — не «зміна даних»
+function persistLocal(){
+  if(SRV){if(CITY&&BASE)try{localStorage.setItem('kv_srv_'+CITY,JSON.stringify({D,EXT,ROLE,ME,PEOPLE}))}catch(_){}return}
+  try{const s=JSON.stringify(D);localStorage.setItem(KEY,s);lastRaw=s}
+  catch(e){
+    if(Date.now()-lastSaveWarn>20000){lastSaveWarn=Date.now();
+      alert('Браузер не зміг зберегти дані ('+e.name+'). Зробіть «Експорт усього» просто зараз, щоб не втратити роботу.')}
+  }
+}
+function save(){persist();render()}
+/* ── Telegram Mini App: хмарне сховище ───────────────────────────
+   Поза Telegram усе працює як раніше (localStorage + експорт файлом).
+   У Telegram дані додатково лежать у CloudStorage бота й синхронізуються
+   між усіма пристроями, де ви увійшли у свій Telegram. */
+const _W=window.Telegram&&Telegram.WebApp;
+const TG=(_W&&(_W.initData||(_W.platform&&_W.platform!=='unknown')))?_W:null;
+const API='https://uekqhxmujccqysgmjmct.supabase.co/functions/v1/api';
+const SRV=!!(TG&&TG.initData);                 // у Telegram — спільна база на сервері
+const CS=(!SRV&&TG&&TG.CloudStorage&&(!TG.isVersionAtLeast||TG.isVersionAtLeast('6.9')))?TG.CloudStorage:null;
+const CHUNK=1800;                       // з запасом: ліміт 4096, а кирилиця в деяких клієнтах рахується байтами
+let cloudErr='',cloudStep='',cloudRetry=null;
+// кожен виклик хмари — з тайм-аутом: деякі клієнти Telegram інколи не відповідають
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const tmo=(p,ms,what)=>Promise.race([p,new Promise((_,no)=>setTimeout(()=>no(new Error('немає відповіді: '+what)),ms))]);
+const cb2p=(fn,what)=>tmo(new Promise((ok,no)=>{try{fn((e,v)=>e?no(new Error(String(e))):ok(v))}catch(x){no(x)}}),7000,what);
+const cs={
+  get1:k=>cb2p(c=>CS.getItem(k,c),'getItem '+k).then(v=>v||''),
+  async get(keys){
+    if(CS.getItems){try{return (await cb2p(c=>CS.getItems(keys,c),'getItems'))||{}}catch(e){console.warn(e)}}
+    const o={};for(const k of keys)o[k]=await cs.get1(k);return o;    // запасний шлях — по одному
+  },
+  async set(k,v){                        // з паузою й повторами: Telegram не любить серію швидких записів
+    for(let a=0;;a++){
+      try{const r=await cb2p(c=>CS.setItem(k,v,c),'setItem '+k);await sleep(120);return r}
+      catch(e){if(a>=3)throw e;await sleep(1500*(a+1))}
+    }
+  },
+  del:keys=>cb2p(c=>CS.removeItems(keys,c),'removeItems'),
+};
+let cloudState='',cloudTimer=null,cloudBusy=false,cloudAgain=false,cloudAt=0,cloudReady=!CS;
+function cloudMark(s){cloudState=s;const el=$('cloud');if(!el)return;
+  const t=cloudAt?new Date(cloudAt).toTimeString().slice(0,5):'';
+  el.textContent={load:'☁ завантажую…',save:'☁ зберігаю…',ok:'☁ збережено'+(t?' '+t:''),err:'⚠ не збережено в хмару',offline:'⚠ без інтернету — збережеться пізніше',off:''}[s]||'';
+  el.className='cloud c-'+s;el.title=cloudErr||'';el.onclick=cloudDiag;el.style.cursor='pointer';}
+function cloudDiag(){
+  if(SRV){$('dlg-body').innerHTML=`<h2 id="dlg-title">Синхронізація</h2>
+    <p>Місто: <b>${esc((CITIES.find(c=>c.id===CITY)||{}).name||'—')}</b> · роль: ${esc({admin:'адміністратор',lead:'керівник',manager:'менеджер'}[ROLE]||'—')}</p>
+    <p class="muted">Стан: ${esc(cloudState)}${cloudErr?' · '+esc(cloudErr):''}</p>
+    <div class="bar"><button class="p" onclick="dlg.close();srvLoad(true)">⟳ Оновити з сервера</button></div>`;dlg.showModal();return}
+  $('dlg-body').innerHTML=`<h2 id="dlg-title">Синхронізація</h2>
+    <table>
+      <tr><td>Telegram</td><td class="num">${TG?esc(TG.platform+' · v'+TG.version):'не виявлено'}</td></tr>
+      <tr><td>Хмара</td><td class="num">${CS?'доступна':'недоступна'}</td></tr>
+      <tr><td>Стан</td><td class="num">${esc(cloudState)}${cloudStep?' · '+esc(cloudStep):''}</td></tr>
+      <tr><td>Помилка</td><td class="num">${esc(cloudErr||'—')}</td></tr>
+      <tr><td>Тут записів</td><td class="num">${D.records.length}</td></tr>
+    </table>
+    <div class="bar" style="margin-top:12px">
+      <button class="p" onclick="dlg.close();cloudSaveNow()">⇪ Записати в хмару</button>
+      <button onclick="dlg.close();cloudLoad(true,true)">⟳ Взяти з хмари</button>
+      <button onclick="backupsDlg()">Резервні копії</button></div>`;
+  dlg.showModal();
+}
+const packD=()=>JSON.stringify(D).replace(/[\ud800-\udfff]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
+let snapDone='';
+async function cloudSnapshot(){
+  if(!CS||!D.records.length||snapDone===today())return;
+  try{
+    let idx=JSON.parse((await cs.get1('bk_meta'))||'[]');if(!Array.isArray(idx))idx=[];
+    const td=today();if(idx.some(b=>b.d===td)){snapDone=td;return}
+    const slot=['s0','s1','s2'].find(s=>!idx.some(b=>b.s===s))||idx.slice().sort((a,b)=>a.t-b.t)[0].s;
+    const s=packD(),n=Math.ceil(s.length/CHUNK)||1;
+    for(let i=0;i<n;i++)await cs.set(slot+'_'+i,s.slice(i*CHUNK,(i+1)*CHUNK));
+    idx=idx.filter(b=>b.s!==slot);idx.push({s:slot,d:td,t:Date.now(),n,len:s.length,r:D.records.length});
+    await cs.set('bk_meta',JSON.stringify(idx));snapDone=td;
+  }catch(e){console.warn('знімок',e)}
+}
+async function backupsDlg(){
+  if(!CS){alert('Резервні копії в хмарі доступні лише в Telegram.');return}
+  $('dlg-body').innerHTML='<h2 id="dlg-title">Резервні копії</h2><p class="muted">Завантажую…</p>';if(!$('dlg').open)dlg.showModal();
+  let idx=[];try{idx=JSON.parse((await cs.get1('bk_meta'))||'[]')}catch(e){}
+  $('dlg-body').innerHTML=`<h2 id="dlg-title">Резервні копії</h2>
+    <p class="muted">Програма сама зберігає знімок даних раз на день і тримає три останні.</p>
+    ${idx.length?idx.slice().sort((a,b)=>b.t-a.t).map(b=>`<div class="trow"><div><b class="num">${fmt(b.d)}</b> <span class="muted">· записів ${b.r}</span></div>
+      <button class="xs" onclick="restoreSnap('${esc(b.s)}')">Відновити</button></div>`).join(''):'<p class="muted">Копій ще немає — перша з’явиться сьогодні після збереження.</p>'}`;
+}
+async function restoreSnap(slot){
+  try{
+    const idx=JSON.parse((await cs.get1('bk_meta'))||'[]'),b=idx.find(x=>x.s===slot);if(!b)return;
+    if(!await ask(`Повернути дані на ${fmt(b.d)} (записів ${b.r})? Поточні буде замінено — їх копія лишиться в «Відновити попередні».`))return;
+    const keys=[...Array(b.n).keys()].map(i=>slot+'_'+i),v=await cs.get(keys),s=keys.map(k=>v[k]||'').join('');
+    if(s.length!==b.len)throw new Error('копія неповна');
+    try{localStorage.setItem(KEY+'_prev',JSON.stringify(D))}catch(_){}
+    D=norm(JSON.parse(s));save();if($('dlg').open)dlg.close();toast('Дані відновлено');
+  }catch(e){alert('Не вдалося відновити: '+e.message)}
+}
+async function cloudSaveNow(){
+  if(!CS)return;
+  if(cloudBusy){cloudAgain=true;return}
+  cloudBusy=true;cloudMark('save');
+  try{
+    const s=packD(),n=Math.ceil(s.length/CHUNK)||1;
+    cloudStep='читаю мітку';
+    const meta=JSON.parse((await cs.get1('d_meta'))||'{}');
+    const slot=meta.s==='a'?'b':'a';                    // пишемо в неактивний слот, потім перемикаємо
+    for(let i=0;i<n;i++){cloudStep=`пишу ${i+1}/${n}`;await cs.set(slot+'_'+i,s.slice(i*CHUNK,(i+1)*CHUNK))}
+    cloudStep='пишу мітку';
+    await cs.set('d_meta',JSON.stringify({s:slot,n,t:D.savedAt||Date.now(),len:s.length}));
+    cloudAt=Date.now();cloudErr='';cloudStep='';cloudMark('ok');
+    setTimeout(cloudSnapshot,1500);
+  }catch(e){console.error(e);cloudErr=(e&&e.message||String(e))+(cloudStep?' ('+cloudStep+')':'');
+    cloudMark(navigator.onLine===false?'offline':'err');clearTimeout(cloudRetry);cloudRetry=setTimeout(cloudSaveNow,45000)}
+  cloudBusy=false;
+  if(cloudAgain){cloudAgain=false;cloudSaveNow()}
+}
+window.addEventListener('online',()=>{if(CS&&cloudReady&&(cloudState==='err'||cloudState==='offline'||cloudState==='save'))cloudSaveNow();else if(CS)cloudLoad(false)});
+window.addEventListener('offline',()=>{if(CS&&cloudState!=='ok')cloudMark('offline')});
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+function cloudSave(){if(!CS)return;clearTimeout(cloudTimer);cloudMark('save');cloudTimer=setTimeout(cloudSaveNow,1200)}
+async function cloudRead(){
+  cloudStep='читаю мітку';
+  const meta=JSON.parse((await cs.get1('d_meta'))||'null');
+  if(!meta||!meta.n)return null;
+  cloudStep='читаю дані';
+  const keys=[...Array(meta.n).keys()].map(i=>meta.s+'_'+i),v=await cs.get(keys);
+  const s=keys.map(k=>v[k]||'').join('');
+  if(meta.len&&s.length!==meta.len)throw new Error('неповні дані в хмарі');
+  return{t:meta.t||0,d:JSON.parse(s)};
+}
+async function cloudLoad(first,force){
+  if(!CS||drawing||editing||(!force&&cloudTimer&&cloudState==='save'))return;
+  if(first)cloudMark('load');
+  try{
+    const c=await cloudRead();cloudReady=true;
+    if(!c){ if(D.records.length||Object.keys(D.geo).length)cloudSaveNow(); else cloudMark('ok'); return }
+    const cRec=Array.isArray(c.d.records)?c.d.records.length:0;
+    if(force||c.t>(D.savedAt||0)||(!D.records.length&&cRec)){   // у хмарі новіше, або тут порожньо — беремо хмару                               // у хмарі новіше — беремо
+      D=norm(c.d);D.savedAt=c.t;persistLocal();render();if(first)fitAll();
+    }else if(c.t<(D.savedAt||0)){cloudSaveNow();return}   // тут новіше (правки без інтернету)
+    cloudAt=Date.now();cloudMark('ok');
+  }catch(e){console.error(e);cloudErr=(e&&e.message||String(e))+(cloudStep?' ('+cloudStep+')':'');cloudMark('err');if(first)cloudReady=true}
+}
+async function cloudClear(){
+  if(!CS)return;
+  try{const v=await new Promise(ok=>CS.getKeys((e,k)=>ok(e?[]:k)));if(v.length)await cs.del(v)}catch(e){console.error(e)}
+}
+function tgInit(){
+  if(!TG){document.body.classList.add('no-tg');return}
+  document.body.classList.add('in-tg');
+  try{TG.ready();TG.expand();
+    applyTheme();TG.onEvent&&TG.onEvent('themeChanged',applyTheme);
+    if(TG.isVersionAtLeast('7.7')&&TG.disableVerticalSwipes)TG.disableVerticalSwipes(); // щоб карта не закривала додаток свайпом
+  }catch(e){console.error(e)}
+  if(SRV){if(TG.BackButton&&TG.isVersionAtLeast('6.1'))TG.BackButton.onClick(tgBackPress);srvInit();return}
+  if(!CS){$('cloud').textContent='⚠ хмара недоступна — оновіть Telegram';$('cloud').onclick=cloudDiag;return}
+  cloudLoad(true);
+  if(TG.BackButton&&TG.isVersionAtLeast('6.1'))TG.BackButton.onClick(tgBackPress);
+  TG.onEvent&&TG.onEvent('viewportChanged',e=>{if(!e||e.isStateStable)fitMapM()});
+  TG.onEvent&&TG.onEvent('activated',()=>cloudLoad(false));
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloudLoad(false);else if(cloudTimer){clearTimeout(cloudTimer);cloudSaveNow()}});
+}
+
+/* ── експорт / імпорт текстом (у Telegram файли не завантажуються) ── */
+function showDlg(html){$('dlg-body').innerHTML=html;$('dlg').showModal?$('dlg').showModal():$('dlg').setAttribute('open','')}
+function copyText(id){
+  const t=$(id);t.focus();t.select();
+  const done=()=>{const b=$(id+'-ok');if(b)b.textContent='Скопійовано ✓'};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t.value).then(done,()=>{try{document.execCommand('copy');done()}catch(_){}});
+  else{try{document.execCommand('copy');done()}catch(_){}}
+}
+function expText(){
+  D.lastExport=today();persist();
+  showDlg(`<h2 id="dlg-title">Резервна копія</h2>
+    <p class="muted">Скопіюйте текст і надішліть собі в «Збережене» в Telegram. Щоб відновити — «Вставити дані».</p>
+    <textarea id="exp-t" readonly style="width:100%;height:180px;font:12px/1.4 var(--mono)">${esc(JSON.stringify(D))}</textarea>
+    <div class="bar" style="margin-top:10px"><button class="p" id="exp-t-ok" onclick="copyText('exp-t')">Копіювати</button></div>`);
+  renderBackup();
+}
+function impTextDlg(){
+  showDlg(`<h2 id="dlg-title">Вставити дані</h2>
+    <p class="muted">Вставте вміст файлу «Експорт усього» (JSON) або текст резервної копії.</p>
+    <textarea id="imp-t" style="width:100%;height:180px;font:12px/1.4 var(--mono)" placeholder='{"settings":…'></textarea>
+    <div class="bar" style="margin-top:10px"><button class="p" onclick="importText($('imp-t').value)">Імпортувати</button></div>`);
+}
+
+const today=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())};
+/* повних місяців між датами — узгоджено з addM (кінець місяця) */
+function months(a,b){
+  if(!okDate(a)||!okDate(b))return null;
+  if(b<a)return -months(b,a);
+  const [y1,m1]=a.split('-').map(Number),[y2,m2]=b.split('-').map(Number);
+  let m=(y2-y1)*12+(m2-m1);
+  while(m>0&&addM(a,m)>b)m--;
+  while(addM(a,m+1)<=b)m++;
+  return m;
+}
+function fmt(d){return okDate(d)?d.split('-').reverse().join('.'):(d?esc(d):'—')}
+/* людський формат тривалості: дні → тижні → місяці → роки */
+function plural(n,f){const m=n%10,h=n%100;
+  return n+' '+(m===1&&h!==11?f[0]:(m>=2&&m<=4&&(h<10||h>=20)?f[1]:f[2]))}
+const DAY=['день','дні','днів'],WEEK=['тиждень','тижні','тижнів'],
+      MON=['місяць','місяці','місяців'],YEAR=['рік','роки','років'];
+function dur(a,b){
+  if(!okDate(a)||!okDate(b))return '—';
+  const d=Math.round((new Date(b)-new Date(a))/864e5);
+  if(isNaN(d)||d<0)return '—';
+  if(d===0)return 'того ж дня';
+  if(d<7)return plural(d,DAY);
+  const m=months(a,b);
+  if(m<1)return plural(Math.round(d/7),WEEK);
+  if(m<12)return plural(m,MON);
+  const y=Math.floor(m/12),r=m%12;
+  return plural(y,YEAR)+(r?' '+plural(r,MON):'');
+}
+const STY={
+  free:{weight:2.2,fillOpacity:.42,opacity:1},busy:{weight:2.4,fillOpacity:.45,opacity:1},
+  soon:{weight:1.8,fillOpacity:.3,opacity:.95},
+  block:{weight:1,fillOpacity:.07,opacity:.55,dashArray:'3,4'},none:{weight:1,fillOpacity:.06,opacity:.5,dashArray:'2,4'}};
+const mapHide=new Set();
+function toggleLeg(s){mapHide.has(s)?mapHide.delete(s):mapHide.add(s);
+  document.querySelectorAll('.legend [data-s]').forEach(x=>x.classList.toggle('off',mapHide.has(x.dataset.s)));drawMap();hap()}
+const COL={free:'#2E6B43',soon:'#8C6510',busy:'#24527A',block:'#B03818',none:'#8A8578'};
+
+/* ── ієрархія ─────────────────────────────── */
+const parentOf=q=>q.includes('.')?q.split('.')[0]:null;
+const kidsOf=p=>D.quadrants.filter(q=>parentOf(q)===p);
+const isLeaf=q=>kidsOf(q).length===0;
+const leaves=()=>D.quadrants.filter(isLeaf);
+const roots=()=>D.quadrants.filter(q=>!parentOf(q));
+function sortKey(q){return q.split('.').map(p=>{const n=parseInt(p);return isNaN(p)||isNaN(n)?p:String(n).padStart(6,'0')}).join('.')}
+
+/* ── статус одиниці ───────────────────────── */
+function qInfo(q){
+  const recs=D.records.filter(r=>r.q===q).sort((a,b)=>a.start.localeCompare(b.start));
+  const active=recs.find(r=>!r.end);
+  let last=recs.filter(r=>r.end).sort((a,b)=>b.end.localeCompare(a.end))[0];
+  const ex=SRV?EXT[q]:null,foreign=!active&&ex&&ex.busy_by?ex.busy_by:null;
+  if(ex&&ex.last_end&&(!last||ex.last_end>last.end))last={q,start:ex.last_end,end:ex.last_end,agents:[],ext:true};
+  const rest=last?months(last.end,today()):null;
+  const {ideal,min}=D.settings;
+  let cls,txt;
+  if(active){cls='busy';txt='В роботі'}
+  else if(foreign){cls='busy';txt='В роботі · '+foreign}
+  else if(!last){cls='none';txt='Без записів'}
+  else if(rest>=ideal){cls='free';txt='Готовий'}
+  else if(rest>=min){cls='soon';txt='Умовно'}
+  else{cls='block';txt='Зарано'}
+  return{q,recs,active,foreign,last,rest,cls,st:cls,txt,been:[...new Set(recs.flatMap(r=>r.agents))]};
+}
+const RANK={busy:0,block:1,soon:2,free:3,none:4};
+function groupInfo(p){                       // зведення по батьківському квадрату
+  const ks=kidsOf(p).map(qInfo);
+  if(!ks.length)return qInfo(p);
+  const busy=ks.filter(k=>k.cls==='busy');
+  const worst=ks.slice().sort((a,b)=>RANK[a.cls]-RANK[b.cls])[0];
+  return{q:p,kids:ks,cls:worst.cls,txt:busy.length?`В роботі · ${busy.length} з ${ks.length}`:(ks.filter(k=>k.cls==='free'||k.cls==='none').length&&worst.cls!=='free'&&worst.cls!=='none'?`${worst.txt} · вільних ${ks.filter(k=>k.cls==='free'||k.cls==='none').length}/${ks.length}`:worst.txt),
+    ready:ks.filter(k=>k.cls==='free'||k.cls==='none').length,total:ks.length,
+    recs:ks.flatMap(k=>k.recs),own:D.records.filter(r=>r.q===p).length};
+}
+
+/* ── імена агентів: «Островський 545» = «545 Островський» ── */
+const findAgent=n=>D.agents.find(a=>normName(a.name)===normName(n));
+const canonName=n=>{const a=findAgent(n);return a?a.name:String(n).trim()};
+const sameAgent=(a,b)=>normName(a)===normName(b);
+const activeAgents=()=>D.agents.filter(a=>!a.left);
+const agentBusy=name=>D.records.filter(r=>!r.end&&r.agents.some(x=>sameAgent(x,name)));
+function dupGroups(){
+  const m=Object.create(null);D.agents.forEach(a=>{const k=normName(a.name);(m[k]=m[k]||[]).push(a.name)});
+  return Object.values(m).filter(g=>g.length>1);
+}
+function mergeAgentObj(A,B){
+  if(A===B)return;
+  D.records.forEach(r=>{r.agents=[...new Set(r.agents.map(n=>sameAgent(n,B.name)?A.name:n))]});
+  if(B.start&&(!A.start||B.start<A.start))A.start=B.start;
+  A.left=A.left&&B.left;A.leftDate=A.left?(A.leftDate||B.leftDate):'';
+  A.trainee=A.trainee||B.trainee;
+  if(B.traineeUntil&&(!A.traineeUntil||B.traineeUntil>A.traineeUntil))A.traineeUntil=B.traineeUntil;
+  D.agents=D.agents.filter(a=>a!==B);
+}
+async function mergeTo(keep,g){
+  const group=typeof g==='string'?JSON.parse(g):g;
+  if(!await ask(`Об'єднати в «${keep}»?\nВаріанти: ${group.join(', ')}\nУся історія перейде на це ім'я.`))return;
+  const A=D.agents.find(a=>a.name===keep);if(!A)return;
+  D.agents.filter(a=>a!==A&&normName(a.name)===normName(keep)).forEach(B=>mergeAgentObj(A,B));
+  save();
+}
+function agentOrder(){
+  return D.agents.map((a,i)=>({a,i})).sort((x,y)=>(x.a.left-y.a.left)||x.a.name.localeCompare(y.a.name,'uk'));
+}
+/* поле вводу всередині програми — prompt() у Telegram на iPhone не працює */
+function inputDlg(title,val,hint){
+  return new Promise(res=>{
+    $('dlg-body').innerHTML=`<h2 id="dlg-title">${esc(title)}</h2>${hint?`<p class="muted">${esc(hint)}</p>`:''}
+      <input id="in-v" value="${esc(val||'')}" style="margin:8px 0 12px">
+      <div class="bar"><button class="p" id="in-ok">Зберегти</button><button id="in-no">Скасувати</button></div>`;
+    let done=false;const fin=v=>{if(done)return;done=true;if($('dlg').open)dlg.close();res(v)};
+    $('in-ok').onclick=()=>fin($('in-v').value);$('in-no').onclick=()=>fin(null);
+    $('in-v').onkeydown=e=>{if(e.key==='Enter')fin($('in-v').value)};
+    $('dlg').addEventListener('close',()=>fin(null),{once:true});
+    if(!$('dlg').open)dlg.showModal();setTimeout(()=>{const x=$('in-v');x.focus();x.select()},60);
+  });
+}
+async function renameAgent(i){
+  const a=D.agents[i];if(!a)return;const old=a.name;
+  const n=((await inputDlg('Перейменувати агента',old,'Наприклад: Матей Віталій 583. Історія перейде на нове ім’я.'))||'').trim();
+  if(!n||n===old)return;
+  if(badName(n)||!normName(n)){alert('Ім\'я не може бути порожнім чи містити лапки, < > & \\');return}
+  const ex=findAgent(n);
+  if(ex&&ex!==a){
+    if(!await ask(`«${n}» — це той самий агент, що «${ex.name}». Об'єднати їх?`))return;
+    mergeAgentObj(ex,a);save();return;
+  }
+  D.records.forEach(r=>{r.agents=r.agents.map(x=>sameAgent(x,old)?n:x)});
+  a.name=n;save();
+}
+async function toggleLeft(i){
+  const a=D.agents[i];if(!a)return;
+  if(!a.left){
+    const b=agentBusy(a.name);
+    if(b.length){
+      if(!await ask(`У «${a.name}» є незакриті записи (${b.map(r=>r.q).join(', ')}).\nПозначити «не працює» і закрити ці записи сьогодні?`))return;
+      b.forEach(r=>{if(r.start<=today())r.end=today()});
+    }
+    a.left=true;a.leftDate=today();
+  }else{a.left=false;a.leftDate=''}
+  save();
+}
+function tenure(n){const a=findAgent(n);return a&&a.start?months(a.start,today()):null}
+/* правило «не повертатись» — лише якщо ввімкнено в налаштуваннях */
+function agentOkX(name,q,skip){
+  if(!D.settings.repeat)return{ok:true,why:''};
+  const last=D.records.filter(r=>r.q===q&&!(skip&&skip.has(r))&&r.agents.some(x=>sameAgent(x,name))).map(r=>r.end||r.start).sort().pop();
+  return last?{ok:false,why:'вже працював тут ('+fmt(last)+')'}:{ok:true,why:'ще не був тут'};
+}
+const agentOk=(name,q)=>agentOkX(name,q,null);
+
+/* ── карта ────────────────────────────────── */
+let labLayer,labCand=[];
+let map,layer,tiles,tileErr=0,drawing=null,tmpLine,tmpPts=[];
+const TILES=[
+ {u:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',a:'© OpenStreetMap',m:19},
+ {u:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',a:'© Esri',m:19},
+ {u:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',a:'© Esri',m:19},
+ {u:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',a:'© Esri',m:19,
+  o:['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}','https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}']},
+ {u:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',a:'© Esri',m:19}];
+let overlays=[];
+function msg(h,c){document.getElementById('mapmsg').innerHTML=h?`<div class="warn ${c||'w-yel'}">${h}</div>`:''}
+function setTiles(i){
+  i=+i||0;tileErr=0;D.tile=i;persistView();document.getElementById('tilesrc').value=i;
+  if(tiles)map.removeLayer(tiles);overlays.forEach(o=>map.removeLayer(o));overlays=[];
+  const t=TILES[i];
+  tiles=L.tileLayer(t.u,{maxZoom:t.m,maxNativeZoom:t.n||t.m,attribution:t.a,crossOrigin:true}).addTo(map);
+  (t.o||[]).forEach(u=>overlays.push(L.tileLayer(u,{maxZoom:t.m,zIndex:5}).addTo(map)));
+  tiles.on('tileerror',()=>{if(++tileErr===6){
+    if(i<TILES.length-1){msg('Підложка не відповідає — перемикаю на резервну…');setTiles(i+1)}
+    else msg('Жодна підложка не вантажиться. Перевірте інтернет або відкрийте файл у Chrome / Safari.','w-red')}});
+  tiles.on('tileload',()=>{tileErr=0});
+  tiles.on('load',()=>{if(tileErr<6)msg('')});
+}
+function initMap(){
+  if(typeof L==='undefined'){document.getElementById('map').innerHTML=
+    '<div style="padding:40px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--ink3)">НЕ ВДАЛОСЬ ЗАВАНТАЖИТИ БІБЛІОТЕКУ КАРТИ — ПОТРІБЕН ІНТЕРНЕТ</div>';return}
+  map=L.map('map',{zoomControl:true}).setView(D.view.c,D.view.z);
+  setTiles(D.tile||0);
+  const FS=L.Control.extend({options:{position:'topright'},onAdd(){
+    const b=L.DomUtil.create('a','leaflet-bar fsbtn');b.href='#';b.id='fsbtn';b.title='Карта на весь екран';b.setAttribute('role','button');
+    b.innerHTML='⛶';L.DomEvent.on(b,'click',e=>{L.DomEvent.preventDefault(e);L.DomEvent.stopPropagation(e);mapFull()});
+    L.DomEvent.disableClickPropagation(b);return b}});
+  map.addControl(new FS());
+
+  setTimeout(()=>map.invalidateSize(),200);
+  window.addEventListener('resize',()=>map.invalidateSize());
+  layer=L.layerGroup().addTo(map);labLayer=L.layerGroup().addTo(map);
+  map.on('zoomend',placeLabels);
+  map.on('moveend',()=>{D.view={c:[map.getCenter().lat,map.getCenter().lng],z:map.getZoom()};persistView()});
+  map.on('click',e=>{if(!drawing)return;tmpPts.push([e.latlng.lat,e.latlng.lng]);drawPreview()});
+  drawMap();
+}
+const centroid=p=>{let x=0,y=0;p.forEach(c=>{x+=c[0];y+=c[1]});return[x/p.length,y/p.length]};
+function drawMap(){
+  if(!layer)return;layer.clearLayers();labCand=[];let n=0;
+  D.quadrants.forEach(q=>{
+    const pts=D.geo[q];if(!pts||pts.length<3)return;n++;
+    if(q===editing)return;
+    const leaf=isLeaf(q);
+    const i=leaf?qInfo(q):groupInfo(q),c=COL[i.cls];
+    if(!leaf){ // батько з дітьми — лише контур
+      L.polygon(pts,{color:'#1B2028',weight:2,fill:false,dashArray:'7,5',opacity:.75,interactive:false}).addTo(layer);
+      return;
+    }
+    if(mapHide.has(i.cls))return;
+    const st=STY[i.cls]||STY.none,base={color:c,fillColor:c,...st};
+    const poly=L.polygon(pts,base).addTo(layer);
+    poly.on('click',ev=>{if(drawing||editing)return;L.DomEvent.stop(ev);openQ(q)});
+    poly.on('mouseover',()=>poly.setStyle({weight:3,fillOpacity:Math.max(st.fillOpacity+.15,.3),opacity:1}));
+    poly.on('mouseout',()=>poly.setStyle(base));
+    labCand.push({q,pts,c,par:parentOf(q)});
+  });
+  placeLabels();
+  document.getElementById('geo-count').textContent=`КОНТУРІВ ${n} / ${D.quadrants.length}`;
+}
+/* підписи без накладань: показуємо лише ті, що влазять; дрібні підквадрати при віддаленні ховаються в номер великого */
+function placeLabels(){
+  if(!labLayer||!map)return;labLayer.clearLayers();
+  const px=pts=>{const b=L.latLngBounds(pts),a=map.latLngToLayerPoint(b.getNorthWest()),z=map.latLngToLayerPoint(b.getSouthEast());return{w:Math.abs(z.x-a.x),h:Math.abs(z.y-a.y)}};
+  const lw=t=>String(t).length*7+12,LH=18;
+  const fits=x=>{const s=px(x.pts);x.size=s.w*s.h;return s.w>=lw(x.q)+4&&s.h>=LH+4};
+  const byPar={};labCand.forEach(x=>{if(x.par)(byPar[x.par]=byPar[x.par]||[]).push(x)});
+  const items=[];
+  labCand.filter(x=>!x.par).forEach(x=>{fits(x);items.push({t:x.q,ll:centroid(x.pts),pr:x.size,c:x.c,q:x.q})});
+  Object.entries(byPar).forEach(([p,ks])=>{
+    const ok=ks.filter(fits);
+    if(ok.length*2>=ks.length)ok.forEach(x=>items.push({t:x.q,ll:centroid(x.pts),pr:x.size,c:x.c,q:x.q}));
+    else{const ll=D.geo[p]?centroid(D.geo[p]):centroid(ks.map(x=>centroid(x.pts)));
+      items.push({t:p,ll,pr:1e12,grp:ks.length,q:p})}
+  });
+  items.sort((a,b)=>b.pr-a.pr);
+  const placed=[];
+  items.forEach(it=>{
+    const pt=map.latLngToLayerPoint(it.ll),w=lw(it.t)+(it.grp?18:0),r={x1:pt.x-w/2-2,x2:pt.x+w/2+2,y1:pt.y-LH/2-2,y2:pt.y+LH/2+2};
+    if(placed.some(o=>r.x1<o.x2&&r.x2>o.x1&&r.y1<o.y2&&r.y2>o.y1))return;
+    placed.push(r);
+    L.marker(it.ll,{icon:L.divIcon({className:'qlab-wrap',iconSize:[0,0],
+      html:it.grp?`<div class="qlab grp">${esc(it.t)}<small>·${it.grp}</small></div>`:`<div class="qlab" style="border-left-color:${it.c}">${esc(it.t)}</div>`}),keyboard:false})
+      .addTo(labLayer).on('click',()=>{if(drawing||editing)return;
+        if(it.grp){const g=D.geo[it.q];map.fitBounds(L.latLngBounds(g||labCand.filter(x=>x.par===it.q).flatMap(x=>x.pts)).pad(.1))}
+        else openQ(it.q)});
+  });
+}
+function workGroups(og){
+  const m=new Map();
+  og.forEach(g=>{const r=g.recs[0];const label=g.recs.length>1&&r.src?r.src+' весь':g.recs.map(x=>x.q).join(', ');
+    const names=r.agents.length?r.agents:['без агента'];
+    names.forEach(n=>{const k=canonName(n);if(!m.has(k)){const a=findAgent(n);m.set(k,{name:k,left:!!(a&&a.left),items:[],oldest:r.start})}
+      const G=m.get(k);G.items.push({g,label,start:r.start});if(r.start<G.oldest)G.oldest=r.start})});
+  return [...m.values()].sort((a,b)=>b.items.length-a.items.length||a.name.localeCompare(b.name,'uk'));
+}
+function workDlg(only){
+  const td=today(),og=openGroups().sort((a,b)=>a.recs[0].start.localeCompare(b.recs[0].start));
+  const gs=workGroups(og).filter(G=>!only||G.name===only);
+  $('dlg-body').innerHTML=`<h2 id="dlg-title">${only?esc(only):'У роботі · '+og.length}</h2>
+    ${only?`<button class="xs" onclick="workDlg()" style="margin:4px 0 8px">← усі агенти</button>`:''}
+    ${gs.map(G=>`<details class="wgrp"${only||gs.length===1?' open':''}><summary><b>${esc(G.name)}</b><span class="num">${G.items.length}</span></summary>
+      ${G.items.sort((a,b)=>a.start.localeCompare(b.start)).map(x=>`<div class="mrow"><b class="mq">${esc(x.label)}</b>
+        <div class="mw"><small>${dur(x.start,td)} · з ${fmt(x.start)}</small></div>
+        <button class="xs" onclick="closeRec(${x.g.idx});setTimeout(()=>workDlg(${only?js(only):"''"}),50)">■ Закрити</button></div>`).join('')}</details>`).join('')
+      ||'<p class="muted">Зараз ніхто не в роботі.</p>'}`;
+  if(!$('dlg').open)dlg.showModal();
+}
+function showAtt(){
+  $('dlg-body').innerHTML=`<h2 id="dlg-title">Нагадування</h2>
+    <p class="muted">Програма сама підказує, що варто перевірити: хто давно без квадрата, які записи забули закрити, яким квадратам бракує контуру.</p>${window._att||''}`;
+  dlg.showModal();
+}
+/* телефон: карта займає весь вільний екран до нижнього меню — без прокрутки */
+function fitMapM(){
+  const m=$('map');if(!m)return;
+  if(!isMob()||!$('v-map').classList.contains('on')||document.body.classList.contains('map-full')){m.style.removeProperty('height');return}
+  const vh=(TG&&TG.viewportStableHeight)||window.innerHeight;
+  const top=m.getBoundingClientRect().top+window.scrollY,bn=($('bnav')||{}).offsetHeight||0;
+  m.style.setProperty('height',Math.max(240,Math.round(vh-top-bn-10))+'px','important');
+  if(map)map.invalidateSize();
+}
+window.addEventListener('resize',()=>setTimeout(fitMapM,50));
+function mapFull(on){
+  on=on===undefined?!document.body.classList.contains('map-full'):on;
+  document.body.classList.toggle('map-full',on);
+  const b=$('fsbtn');if(b){b.innerHTML=on?'✕':'⛶';b.title=on?'Згорнути карту':'Карта на весь екран'}
+  setTimeout(()=>{fitMapM();if(map)map.invalidateSize()},80);tgBack();
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('map-full'))mapFull(false)});
+function fitAll(){if(!map)return;const a=Object.values(D.geo).flat();if(a.length)map.fitBounds(L.latLngBounds(a).pad(.05))}
+
+/* ── малювання ────────────────────────────── */
+function pickQ(need){
+  const q=document.getElementById('m-draw-q').value;
+  if(!q){alert((isMob()?'Натисніть на квадрат на карті — у картці є «Керування».':'Спершу оберіть квадрат у списку зліва'));return null}
+  if(need&&!D.geo[q]){alert(`У «${q}» ще немає контуру — натисніть «Обвести».`);return null}
+  return q;
+}
+async function startDraw(){
+  if(!map){alert('Карта не завантажена (потрібен інтернет).');return}
+  if(editing){alert('Спершу збережіть або скасуйте редагування меж.');return}
+  const q=pickQ(false);if(!q)return;
+  if(drawing&&tmpPts.length&&!await ask('Скинути малювання, яке вже розпочато?'))return;
+  if(D.geo[q]&&!await ask(`Для «${q}» контур уже є. Перемалювати?`))return;
+  map.doubleClickZoom.disable();drawing=q;tmpPts=[];
+  document.getElementById('drawbox').classList.add('on');
+  document.getElementById('draw-title').textContent='Малюємо '+q;
+  drawPreview();
+}
+function drawPreview(){
+  if(tmpLine){map.removeLayer(tmpLine);tmpLine=null}
+  if(tmpPts.length)tmpLine=L.polygon(tmpPts,{color:'#C1401D',weight:2,dashArray:'5,5',fillOpacity:.12}).addTo(map);
+  document.getElementById('draw-n').textContent='ТОЧОК: '+tmpPts.length;
+}
+function undoPt(){tmpPts.pop();drawPreview()}
+function finishDraw(){if(tmpPts.length<3){alert('Треба щонайменше 3 точки');return}
+  if(D.quadrants.includes(drawing))D.geo[drawing]=tmpPts;cancelDraw();save()}
+function cancelDraw(){drawing=null;tmpPts=[];if(map){if(tmpLine){map.removeLayer(tmpLine);tmpLine=null}map.doubleClickZoom.enable()}
+  document.getElementById('drawbox').classList.remove('on')}
+
+/* ── редагування меж ──────────────────────── */
+let editing=null,editPts=null,editPoly=null,handles=[];
+function startEdit(q){
+  q=q||pickQ(true);if(!q)return;
+  if(!D.geo[q]){alert(`У «${q}» немає контуру.`);return}
+  if(!map){alert('Карта не завантажена (потрібен інтернет).');return}
+  if(drawing){alert('Спершу завершіть або скасуйте малювання.');return}
+  map.doubleClickZoom.disable();editing=q;editPts=D.geo[q].map(p=>[p[0],p[1]]);
+  document.getElementById('editbox').classList.add('on');
+  document.getElementById('edit-title').textContent='Межі '+q;
+  map.fitBounds(L.latLngBounds(editPts).pad(.15));drawMap();drawEdit();
+}
+function clearHandles(){handles.forEach(h=>map.removeLayer(h));handles=[];
+  if(editPoly){map.removeLayer(editPoly);editPoly=null}}
+function drawEdit(){
+  clearHandles();
+  editPoly=L.polygon(editPts,{color:'#C1401D',weight:2.5,dashArray:'6,4',fillOpacity:.14}).addTo(map);
+  editPts.forEach((p,i)=>{
+    const h=L.marker(p,{draggable:true,icon:L.divIcon({className:'',html:'<div class="vh"></div>',iconSize:[13,13],iconAnchor:[6,6]})}).addTo(map);
+    h.on('drag',e=>{editPts[i]=[e.latlng.lat,e.latlng.lng];editPoly.setLatLngs(editPts)});
+    h.on('dragend',drawEdit);
+    h.on('dblclick',e=>{L.DomEvent.stop(e);
+      if(editPts.length<=3){alert('Мінімум 3 точки');return}
+      editPts.splice(i,1);drawEdit()});
+    h.on('click',e=>{if(e.originalEvent.altKey){
+      if(editPts.length<=3){alert('Мінімум 3 точки');return}
+      editPts.splice(i,1);drawEdit()}});
+    handles.push(h);
+    const nx=editPts[(i+1)%editPts.length],mid=[(p[0]+nx[0])/2,(p[1]+nx[1])/2];
+    const m=L.marker(mid,{icon:L.divIcon({className:'',html:'<div class="vm"></div>',iconSize:[11,11],iconAnchor:[5,5]})}).addTo(map);
+    m.on('click',()=>{editPts.splice(i+1,0,mid);drawEdit()});
+    handles.push(m);
+  });
+}
+function finishEdit(){if(editing&&D.quadrants.includes(editing))D.geo[editing]=editPts;cancelEdit();save()}
+function cancelEdit(){if(map){clearHandles();map.doubleClickZoom.enable()}editing=null;editPts=null;
+  document.getElementById('editbox').classList.remove('on');drawMap()}
+
+/* ── структура: додати / перейменувати / видалити ── */
+function migrate(o,n){
+  D.quadrants=D.quadrants.map(x=>x===o?n:x);
+  if(D.geo[o]){D.geo[n]=D.geo[o];delete D.geo[o]}
+  D.records.forEach(r=>{if(r.q===o)r.q=n;if(r.src===o)r.src=n});
+  kidsOf(o).forEach(k=>migrate(k,n+'.'+k.slice(o.length+1)));
+}
+const badName=s=>/['"<>\\&`]/.test(s)||RESERVED(s);
+async function renameQ(q){
+  if(drawing||editing){alert('Спершу завершіть або скасуйте малювання / редагування меж.');return}
+  q=q||pickQ(false);if(!q)return;
+  const n=((await inputDlg(`Нова назва для «${q}»`,q))||'').trim();
+  if(!n||n===q)return;
+  if(D.quadrants.includes(n)){alert('Такий уже є');return}
+  const root=parentOf(q);
+  if(badName(n)){alert('Назва не може містити лапки, < > & \\');return}
+  if(root){const p=n.split('.');if(p.length!==2||p[0]!==root||!p[1]){alert(`Підквадрат має називатись «${root}.N», наприклад ${root}.7`);return}}
+  else if(n.includes('.')){alert('Назва основного квадрата не може містити крапку. Для підквадрата є кнопка «+ Підквадрат».');return}
+  const kids=kidsOf(q).length;
+  if(kids&&!await ask(`У «${q}» є ${kids} підквадратів — вони теж перейменуються (${n}.1 і т.д.). Продовжити?`))return;
+  migrate(q,n);sortQ();$('m-draw-q').value=n;
+}
+function parseQList(str){
+  const out=[];
+  String(str||'').split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean).forEach(t=>{
+    const m=t.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
+    if(m){let a=+m[1],b=+m[2];if(a>b){const c=a;a=b;b=c}
+      if(b-a>200)return; for(let i=a;i<=b;i++)out.push(String(i))}
+    else out.push(/^\d+$/.test(t)?String(Number(t)):t);
+  });
+  return [...new Set(out)];
+}
+function addQ(){
+  const list=parseQList($('s-newq').value);
+  if(!list.length){$('q-added').innerHTML=`<div class="warn w-yel">Впишіть номер або кілька через кому: <b>22, 23, 24</b> чи діапазон <b>22-26</b> (не більше 200 за раз).</div>`;return}
+  const added=[],dup=[],bad=[];
+  list.forEach(n=>{
+    if(badName(n)||n.includes('.'))bad.push(n);
+    else if(D.quadrants.includes(n))dup.push(n);
+    else{D.quadrants.push(n);added.push(n)}});
+  $('s-newq').value='';
+  sortQ();
+  $('q-added').innerHTML=
+    (added.length?`<div class="warn w-grn">Додано: <b>${esc(added.join(', '))}</b>. Тепер відкрийте «Карта» → оберіть квадрат → «Обвести», щоб задати межі.</div>`:'')+
+    (dup.length?`<div class="warn w-yel">Уже існували, пропущено: ${esc(dup.join(', '))}</div>`:'')+
+    (bad.length?`<div class="warn w-red">Не додано (крапка чи спецсимволи в назві): ${esc(bad.join(', '))}. Підквадрати створює кнопка «+ підкв.».</div>`:'');
+  if(added.length)$('m-draw-q').value=added[0];
+}
+function goAddQ(){
+  document.querySelector('.tab[data-v="set"]').click();
+  const i=$('s-newq');i.scrollIntoView&&i.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>i.focus(),300);
+}
+function addSub(p){
+  p=p||pickQ(false);if(!p)return;
+  if(parentOf(p)){alert('Підквадрат другого рівня не підтримується. Оберіть основний квадрат.');return}
+  const used=kidsOf(p).map(k=>parseInt(k.split('.')[1])).filter(x=>!isNaN(x));
+  let i=1;while(used.includes(i))i++;
+  const n=p+'.'+i;
+  D.quadrants.push(n);
+  const own=D.records.filter(r=>r.q===p).length;
+  save();$('m-draw-q').value=n;
+  alert(`Створено «${n}».`+(own?`\n\nУвага: у квадрата ${p} є ${own} власних записів історії. Вони не враховуються у статусах підквадратів. Перенесіть їх (Історія → ✎) на потрібні підквадрати.`:'')
+    +`\n\nТепер натисніть «Обвести», щоб задати його межі.`);
+}
+async function delQ(q){
+  if(drawing||editing){alert('Спершу завершіть або скасуйте малювання / редагування меж.');return}
+  q=q||pickQ(false);if(!q)return;
+  const kids=kidsOf(q),all=[q,...kids];
+  const n=D.records.filter(r=>all.includes(r.q)).length;
+  const open=D.records.filter(r=>all.includes(r.q)&&!r.end).length;
+  if(!await ask(`Видалити «${q}»?`+(kids.length?`\nРазом з ${kids.length} підквадратами.`:'')+(n?`\nЗникне ${n} записів історії.`:'')+(open?`\nУвага: серед них ${open} незакритих.`:'')))return;
+  D.quadrants=D.quadrants.filter(x=>!all.includes(x));
+  all.forEach(x=>delete D.geo[x]);
+  D.records=D.records.filter(r=>!all.includes(r.q));save();
+}
+async function clearGeo(q){if(D.geo[q]&&await ask(`Стерти контур «${q}» з карти? Історія залишиться.`)){delete D.geo[q];save()}}
+function sortQ(){D.quadrants.sort((a,b)=>sortKey(a).localeCompare(sortKey(b),'uk',{numeric:true}));save()}
+
+/* ── імпорт / експорт ─────────────────────── */
+async function impGeo(ev){
+  const f=ev.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=async()=>{try{
+    const txt=r.result,got={};let skipped=0;
+    const addRing=(nm,pts,k)=>{
+      pts=pts.map(c=>[parseFloat(c[0]),parseFloat(c[1])]).filter(c=>isFinite(c[0])&&isFinite(c[1])&&Math.abs(c[0])<=90&&Math.abs(c[1])<=180);
+      if(pts.length>3){const a=pts[0],b=pts[pts.length-1];if(a[0]===b[0]&&a[1]===b[1])pts.pop()}   // прибираємо замикаючу точку
+      if(new Set(pts.map(c=>c.join())).size<3){skipped++;return}
+      if(RESERVED(nm)||nm.length>40){skipped++;return}
+      got[k?nm+'_ч'+(k+1):nm]=pts};
+    if(f.name.toLowerCase().endsWith('.kml')){
+      const x=new DOMParser().parseFromString(txt,'text/xml');
+      [...x.getElementsByTagName('Placemark')].forEach(pm=>{
+        const nm=(pm.getElementsByTagName('name')[0]?.textContent||'').trim();
+        const co=pm.getElementsByTagName('coordinates')[0]?.textContent||'';
+        if(!nm){skipped++;return}
+        addRing(nm,co.trim().split(/\s+/).map(s=>s.split(',')).filter(a=>a.length>=2).map(a=>[+a[1],+a[0]]),0)});
+    }else{
+      const g=JSON.parse(txt),feats=g&&g.type==='FeatureCollection'&&Array.isArray(g.features)?g.features:[g];
+      feats.forEach(ft=>{
+        if(!ft||typeof ft!=='object'){skipped++;return}
+        const p=ft.properties||{};
+        const nm=String(p.name||p.Name||p.NAME||p.title||p.id||'').trim();
+        if(!nm){skipped++;return}
+        const gm=ft.geometry||ft;let rings=[];
+        if(gm.type==='Polygon')rings=[(gm.coordinates||[])[0]];
+        else if(gm.type==='MultiPolygon')rings=(gm.coordinates||[]).map(c=>c&&c[0]);
+        rings.forEach((ring,k)=>addRing(nm,(Array.isArray(ring)?ring:[]).filter(Array.isArray).map(c=>[c[1],c[0]]),k))});
+    }
+    const keys=Object.keys(got);
+    if(!keys.length){alert('Полігонів з назвами у файлі не знайдено'+(skipped?` (пропущено без назви чи з <3 точок: ${skipped})`:''));return}
+    const match=[],unmatched=[];
+    keys.forEach(k=>{
+      const m=/_ч\d+$/.test(k)?null:k.match(/^\D*(\d+(?:\.\d+)?)\D*$/),num=m&&String(parseFloat(m[1])===+m[1]?m[1].replace(/^0+(?=\d)/,''):m[1]);
+      const t=D.quadrants.includes(k)?k:(num&&D.quadrants.includes(num)?num:null);
+      (t?match:unmatched).push([k,t]);});
+    let create=false;
+    if(unmatched.length)create=await ask(`Не знайшов відповідних квадратів для: ${unmatched.map(u=>u[0]).join(', ')}.\nСтворити з них нові квадрати?`);
+    const over=match.filter(([k,t])=>D.geo[t]).length;
+    if(over&&!await ask(`Уже є контури для ${over} квадратів. Перезаписати їх?`))match.length=0;
+    match.forEach(([k,t])=>{D.geo[t]=got[k]});
+    if(create)unmatched.forEach(([k])=>{if(!badName(k)&&!k.includes('.')){D.quadrants.push(k);D.geo[k]=got[k]}});
+    sortQ();fitAll();
+    alert(`Завантажено контурів: ${match.length+(create?unmatched.length:0)}. Прив'язано до наявних: ${match.length}.`+(skipped?`\nПропущено без назви чи з <3 точок: ${skipped}.`:''));
+  }catch(e){alert('Не вдалось прочитати файл: '+e.message)}};
+  r.readAsText(f);ev.target.value='';
+}
+function expGeo(){
+  const fc={type:'FeatureCollection',features:Object.entries(D.geo).map(([q,p])=>({
+    type:'Feature',properties:{name:q},
+    geometry:{type:'Polygon',coordinates:[p.map(c=>[c[1],c[0]]).concat([[p[0][1],p[0][0]]])]}}))};
+  dl(new Blob([JSON.stringify(fc,null,2)],{type:'application/json'}),'kvadraty-kontury.geojson');
+}
+function exp(){
+  D.lastExport=today();persist();
+  dl(new Blob([JSON.stringify(D,null,2)],{type:'application/json'}),'kvadraty-'+today()+'.json');
+  renderBackup();
+}
+function expCsv(){
+  const safe=c=>{c=String(c);return /^[=+\-@\t\r]/.test(c)?"'"+c:c};
+  const rows=[['квадрат','початок','кінець','днів','агенти','примітка','частина']].concat(
+    D.records.map(r=>[r.q,r.start,r.end||'',r.end?Math.round((new Date(r.end)-new Date(r.start))/864e5):'',r.agents.join('; '),r.note||'',r.part?'так':''].map(safe)));
+  dl(new Blob(['﻿'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n')],{type:'text/csv'}),'kvadraty-'+today()+'.csv');
+}
+function dl(b,n){const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=n;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+function impF(ev){
+  const f=ev.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>importText(r.result);
+  r.readAsText(f);ev.target.value='';
+}
+async function importText(txt){
+  {try{
+    const raw=JSON.parse(String(txt||'').trim());
+    if(!raw||typeof raw!=='object'||Array.isArray(raw)||!(Array.isArray(raw.quadrants)||Array.isArray(raw.records))){alert('Це не файл «Експорт усього» з цієї програми (немає quadrants/records). Імпорт скасовано.');return}
+    const n=norm(raw);
+    n.records.forEach(x=>x.agents.forEach(a=>{if(!n.agents.some(g=>g.name===a))n.agents.push({name:a,start:'',left:false,leftDate:'',trainee:false,traineeUntil:''})}));
+    if(!n.records.length&&!n.quadrants.length){alert('У файлі немає ні квадратів, ні записів — імпорт скасовано.');return}
+    if(!await ask(`Замінити ВСІ поточні дані файлом?\n\nУ файлі: квадратів ${n.quadrants.length}, записів ${n.records.length}, агентів ${n.agents.length}.\nПоточні: квадратів ${D.quadrants.length}, записів ${D.records.length}, агентів ${D.agents.length}.`))return;
+    try{localStorage.setItem(KEY+'_prev',JSON.stringify(D))}catch(_){}
+    if(typeof cancelDraw==='function'){cancelDraw();cancelEdit()}
+    D=n;save();fitAll();
+    if($('dlg').open)$('dlg').close();
+    alert('Імпортовано. Попередні дані збережено як резерв («Відновити попередні» в Налаштуваннях).');
+  }catch(e){alert('Не вдалось прочитати дані: '+e.message)}}
+}
+async function clearAll(){
+  if(!await ask('Видалити ВСІ дані?'+(CS?'\nВони зникнуть і з хмари Telegram на всіх пристроях.':'')))return;
+  try{localStorage.setItem(KEY+'_prev',JSON.stringify(D))}catch(_){}
+  await cloudClear();localStorage.removeItem(KEY);location.reload();
+}
+async function restorePrev(){
+  let raw=null;try{raw=localStorage.getItem(KEY+'_prev')}catch(_){}
+  if(!raw){alert('Резервної копії немає.');return}
+  if(!await ask('Повернути дані, що були до останнього імпорту? Поточні буде замінено.'))return;
+  try{cancelDraw();cancelEdit();D=norm(JSON.parse(raw));save();fitAll()}catch(e){alert('Не вдалось: '+e.message)}
+}
+function renderBackup(){
+  const b=$('backupbar');if(!b)return;
+  if(!D.records.length){b.innerHTML='';return}
+  const days=D.lastExport?Math.round((new Date(today())-new Date(D.lastExport))/864e5):null;
+  if(TG){b.innerHTML=(CS&&(days===null||days>30))?`<div class="warn w-yel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <span>Дані в хмарі Telegram. Раз на місяць варто зберегти додаткову копію.</span>
+        <button class="xs p" onclick="expText()">↥ Копія</button></div>`:'';return}
+  b.innerHTML=(days===null||days>7)
+    ?`<div class="warn w-yel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <span>${days===null?'Резервної копії ще не було.':'Останній експорт був '+dur(D.lastExport,today())+' тому.'} Дані живуть лише в цьому браузері.</span>
+        <button class="xs p" onclick="exp()">↥ Зробити експорт</button></div>`:'';
+}
+
+/* ── рендер ───────────────────────────────── */
+function render(){
+  try{_render();const f=$('fatal');if(f)f.innerHTML=''}
+  catch(e){console.error(e);const f=$('fatal');if(f)f.innerHTML=`<div class="warn w-red">Помилка відображення: ${esc(e.message)}. Дані не втрачено. <button class="xs" onclick="dumpRaw()">↥ Зберегти сирі дані</button></div>`}
+}
+function dumpRaw(){let s='';try{s=localStorage.getItem(KEY)||JSON.stringify(D)}catch(_){s=JSON.stringify(D)}dl(new Blob([s],{type:'application/json'}),'kvadraty-raw-'+today()+'.json')}
+function _render(){
+  $('today').textContent=fmt(today());
+  const L_=leaves().map(qInfo);
+  const c=s=>L_.filter(i=>i.cls===s).length;
+  $('stats').innerHTML=
+    [['busy','В роботі'],['free','Готові · '+D.settings.ideal+'+ міс'],['soon','Умовно · '+D.settings.min+'–'+D.settings.ideal],['block','Зарано · <'+D.settings.min],['none','Без записів']]
+    .map(([s,l])=>{const [a,b]=l.split(' · ');return `<div class="stat s-${s}"><b class="t-${s}">${c(s)}</b><span>${a}${b?`<em> · ${b}</em>`:''}</span></div>`}).join('');
+  renderBackup();renderToday();renderForecast();renderSpeed();
+
+  // реєстр: батько → діти
+  let k=0;
+  const singles=[],parts=[];
+  roots().forEach(p=>{
+    const ks=kidsOf(p);
+    if(!ks.length){singles.push(cardHtml(qInfo(p),k++));return}
+    const g=groupInfo(p);
+    parts.push(`<div class="groupttl"><h3>Квадрат ${esc(p)}</h3><span class="stamp s-${g.cls}">${esc(g.txt)}</span>
+        ${g.own?`<span class="tag" style="border-color:var(--acc);color:var(--acc)" title="Записи, прив'язані до всього квадрата, а не до підквадратів">⚠ ${g.own} записів на групі</span>`:''}
+        <span class="ln"></span>
+        <button class="xs" onclick="addSub(${js(p)})">+ підквадрат</button></div>
+      <div class="grid">${ks.map(x=>cardHtml(qInfo(x),k++)).join('')}</div>`);
+  });
+  $('reg').innerHTML=(parts.join('')+(singles.length?`<div class="groupttl"><h3>Без поділу</h3><span class="ln"></span></div><div class="grid">${singles.join('')}</div>`:''))
+    ||'<p class="muted">Квадратів ще немає.</p>';
+
+  // селекти з деревом
+  const treeOpts=D.quadrants.slice().sort((a,b)=>sortKey(a).localeCompare(sortKey(b),'uk',{numeric:true}))
+    .map(q=>`<option value="${esc(q)}">${parentOf(q)?'   ↳ ':''}${esc(q)}${isLeaf(q)?(D.geo[q]?' ✓':' ·без контуру'):' ▸група'}</option>`).join('');
+  const md=$('m-draw-q'),fq=$('f-q');
+  const kd=md.value,kq=fq.value;
+  md.innerHTML='<option value="">— оберіть квадрат —</option>'+treeOpts;
+  fq.innerHTML='<option value=""></option>'+treeOpts;
+  md.value=kd;fq.value=kq;
+  const pa=$('p-agent'),ka=pa.value;
+  pa.innerHTML='<option value="">— оберіть —</option>'+activeAgents().map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
+  pa.value=ka;
+
+  renderJournal();
+
+  // агенти
+  const rep=D.settings.repeat;
+  $('a-tbl').innerHTML=
+    `<tr><th>Агент</th><th>Статус</th><th>Зараз</th><th>Опрацьовані</th><th></th></tr>`+
+    agentOrder().map(({a,i})=>{const t=tenure(a.name);
+      const busy=agentBusy(a.name).map(r=>r.q);
+      const qs=[...new Set(D.records.filter(r=>r.agents.some(x=>sameAgent(x,a.name))).map(r=>r.q))]
+        .sort((x,y)=>sortKey(x).localeCompare(sortKey(y),'uk',{numeric:true}));
+      return `<tr class="${a.left?'dim':''}"><td><b>${esc(a.name)}</b>${a.trainee?' <span class="tag">стажер</span>':''}</td>
+        <td>${a.left?`<span class="stamp s-none">не працює${a.leftDate?' · '+esc(fmt(a.leftDate)):''}</span>`:'<span class="stamp s-free">працює</span>'}</td>
+        <td>${busy.map(q=>`<span class="tag">${esc(q)}</span>`).join('')||'<span class="muted">—</span>'}</td>
+        <td>${qs.map(q=>`<span class="tag">${esc(q)}</span>`).join('')||'<span class="muted">—</span>'}</td>
+        <td style="white-space:nowrap">${a.left?'':`<button class="xs" onclick="toggleTrainee(${i})">${a.trainee?'у соло':'стажер'}</button> `}<button class="xs" onclick="toggleLeft(${i})">${a.left?'повернути':'не працює'}</button>
+        <button class="xs" onclick="renameAgent(${i})">перейм.</button>
+        <button class="d" onclick="delA(${i})">×</button></td></tr>`}).join('');
+
+  const card=({a,i})=>{
+    const busy=agentBusy(a.name).map(r=>r.q);
+    const qs=[...new Set(D.records.filter(r=>r.agents.some(x=>sameAgent(x,a.name))).map(r=>r.q))]
+      .sort((x,y)=>sortKey(x).localeCompare(sortKey(y),'uk',{numeric:true}));
+    return `<div class="acard${a.left?' dim':''}">
+      <div class="ah"><b>${esc(a.name)}</b>${a.trainee?'<span class="tag">стажер</span>':''}
+        <span class="stamp ${a.left?'s-none':'s-free'}">${a.left?'не працює':'працює'}</span></div>
+      <div class="ai">${busy.length?`Зараз: <b>${esc(busy.join(', '))}</b>`:'<span class="muted">Зараз вільний</span>'}</div>
+      ${qs.length?`<details class="aq"><summary>Опрацьовано: ${qs.length}</summary><div class="chips">${qs.map(q=>`<span class="tag">${esc(q)}</span>`).join('')}</div></details>`:''}
+      <div class="ab">${a.left?'':`<button class="xs" onclick="toggleTrainee(${i})">${a.trainee?'у соло':'стажер'}</button>`}
+        <button class="xs" onclick="toggleLeft(${i})">${a.left?'повернути':'не працює'}</button>
+        <button class="xs" onclick="renameAgent(${i})">перейм.</button>
+        <button class="d" onclick="delA(${i})" aria-label="Видалити">×</button></div></div>`};
+  const ord=agentOrder(),act=ord.filter(x=>!x.a.left),gone=ord.filter(x=>x.a.left);
+  $('a-list').innerHTML=(act.map(card).join('')||'<p class="muted">Активних агентів немає.</p>')+
+    (gone.length?`<details class="gone-box"><summary>Не працюють · ${gone.length}</summary>${gone.map(card).join('')}</details>`:'');
+
+  // дублікати імен
+  const dups=dupGroups();
+  $('dupbox').innerHTML=dups.length?`<div class="panel" style="border-color:var(--acc)">
+    <h2 style="color:var(--acc)">Схоже, це одні й ті самі люди</h2>
+    ${dups.map(g=>`<div class="warn w-red">
+      Записані по-різному: ${g.map(x=>`<b>${esc(x)}</b>`).join(' · ')}
+      <div class="bar" style="margin:9px 0 0">${g.map(x=>`<button class="xs" onclick="mergeTo(${js(x)},${js(JSON.stringify(g))})">залишити «${esc(x)}»</button>`).join('')}</div>
+    </div>`).join('')}
+  </div>`:'';
+
+  // швидкі підказки імен у формі історії — лише ті, хто працює
+  $('f-achips').innerHTML=activeAgents().length?
+    `<span class="muted" style="margin-right:6px">додати:</span>`+
+    activeAgents().map(a=>`<button type="button" class="xs" style="margin:2px 3px 0 0;text-transform:none;letter-spacing:0"
+      onclick="pushAgent(${js(a.name)})">${esc(a.name)}</button>`).join(''):'';
+
+  // структура
+  $('q-tbl').innerHTML=
+    `<tr><th>Територія</th><th>Контур</th><th>Записів</th><th>Статус</th><th>Дії</th></tr>`+
+    D.quadrants.slice().sort((a,b)=>sortKey(a).localeCompare(sortKey(b),'uk',{numeric:true})).map(q=>{
+      const sub=!!parentOf(q),leaf=isLeaf(q),i=leaf?qInfo(q):groupInfo(q),has=!!D.geo[q];
+      return `<tr><td class="num">${sub?'<span class="tree-in">&nbsp;&nbsp;↳ </span>':''}<b>${esc(q)}</b>${leaf?'':' <span class="muted">група</span>'}</td>
+        <td class="num">${has?'<span class="t-free">'+D.geo[q].length+' тчк</span>':'<span class="muted">—</span>'}</td>
+        <td class="num">${D.records.filter(r=>r.q===q).length}</td>
+        <td><span class="stamp s-${i.cls}">${esc(i.txt)}</span></td>
+        <td style="white-space:nowrap">
+          ${!sub?`<button class="xs" onclick="addSub(${js(q)})">+ підкв.</button>`:''}
+          ${has?`<button class="xs" onclick="document.querySelector('.tab[data-v=map]').click();startEdit(${js(q)})">межі</button>`:''}
+          <button class="xs" onclick="renameQ(${js(q)})">перейм.</button>
+          ${has?`<button class="xs" onclick="clearGeo(${js(q)})">стерти контур</button>`:''}
+          <button class="d" onclick="delQ(${js(q)})">×</button></td></tr>`}).join('');
+
+  $('s-ideal').value=D.settings.ideal;
+  $('s-min').value=D.settings.min;
+  $('s-repeat').checked=!!D.settings.repeat;
+  drawMap();plan();syncAllBox();
+}
+let jAll=false;
+const fmtS=d=>{if(!okDate(d))return '—';const y=d.slice(0,4);return d.slice(8,10)+'.'+d.slice(5,7)+(y===today().slice(0,4)?'':'.'+y.slice(2))};
+function renderJournal(){
+  const s=($('q-search').value||'').toLowerCase().trim();
+  const rows=D.records.map((r,idx)=>({r,idx}))
+    .filter(({r})=>!s||[r.q,r.src,fmt(r.start),fmt(r.end),r.start,r.end,r.agents.join(' '),r.note].join(' ').toLowerCase().includes(s))
+    .sort((a,b)=>b.r.start.localeCompare(a.r.start));
+  $('tbl').innerHTML=
+    `<tr><th>Кв.</th><th>Початок</th><th>Кінець</th><th>Трив.</th><th>Агенти</th><th>Примітка</th><th></th></tr>`+
+    rows.map(({r,idx})=>`<tr><td class="num"><b>${esc(r.q)}</b>${r.grp?`<br><span class="tag" title="запис створено як «весь квадрат ${esc(r.src)}»">◱ весь ${esc(r.src)}</span>`:''}</td><td class="num">${fmt(r.start)}</td>
+      <td class="num">${r.end?fmt(r.end):'<span class="t-busy">в роботі</span>'}</td>
+      <td class="num">${r.end?dur(r.start,r.end):'—'}${r.part?' <span class="tag" title="частковий день — не враховується у швидкості">½</span>':''}</td>
+      <td>${r.agents.map(a=>`<span class="tag">${esc(a)}</span>`).join('')}${ownerTag(r)}</td>
+      <td class="muted">${esc(r.note||'')}</td>
+      <td style="white-space:nowrap"><button class="xs" onclick="editRec(${idx})">✎</button>
+      <button class="d" onclick="del(${idx})">×</button></td></tr>`).join('');
+  const lim=jAll||s?1e9:40;
+  $('jlist').innerHTML=rows.slice(0,lim).map(({r,idx})=>`<div class="jrow">
+      <b class="jq">${esc(r.q)}</b>
+      <div class="jm"><div class="jd">${fmtS(r.start)} – ${r.end?fmtS(r.end):'<span class="t-busy">в роботі</span>'}${r.end?` · ${dur(r.start,r.end)}`:''}${r.part?' · ½':''}${r.grp?` · <span class="muted">весь ${esc(r.src)}</span>`:''}</div>
+        <div class="ja">${esc(r.agents.join(', ')||'—')}${ownerTag(r)}</div>${r.note?`<div class="jn">${esc(r.note)}</div>`:''}</div>
+      <div class="jb"><button class="xs" onclick="editRec(${idx})" aria-label="Редагувати">✎</button><button class="d" onclick="del(${idx})" aria-label="Видалити">×</button></div>
+    </div>`).join('')||'<p class="muted">Записів немає.</p>';
+  if(rows.length>lim)$('jlist').innerHTML+=`<button class="xs" style="width:100%;margin-top:8px" onclick="jAll=true;renderJournal()">Показати всі (${rows.length})</button>`;
+}
+function cardHtml(i,k){
+  const sub=i.active?`з <b>${fmt(i.active.start)}</b><br>${esc(i.active.agents.join(', ')||'—')}`
+    :i.last?`відпочив <b>${dur(i.last.end,today())}</b><br>ост. <b>${fmt(i.last.end)}</b>`:'записів немає';
+  return `<div class="card b-${i.cls}" style="animation-delay:${Math.min(k,18)*22}ms" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="openQ(${js(i.q)})">
+    <div class="n">${esc(i.q)}</div><div style="margin-top:8px"><span class="stamp s-${i.cls}">${esc(i.txt)}</span></div>
+    <div class="sub">${sub}</div></div>`;
+}
+
+function openQ(q){
+  const leaf=isLeaf(q),i=leaf?qInfo(q):groupInfo(q);
+  const seen=new Set();
+  const recs=(i.recs||[]).slice().sort((a,b)=>b.start.localeCompare(a.start)).filter(r=>{
+    if(leaf||!r.grp)return true;
+    if(seen.has(r.grp))return false;seen.add(r.grp);return true});
+  const hist=recs.map(r=>`<div class="hrow"><b class="num">${esc(!leaf&&r.grp?r.src+' весь':r.q)}</b>
+      <span class="num">${fmtS(r.start)} – ${r.end?fmtS(r.end):'зараз'}${r.end?' · '+dur(r.start,r.end):''}</span>
+      <span>${esc(r.agents.join(', '))}</span>${r.note?`<span class="muted">${esc(r.note)}</span>`:''}</div>`).join('')
+    ||'<p class="muted">Записів немає.</p>';
+  let act='';
+  if(leaf&&i.foreign){
+    act=`<div class="warn w-yel">Зараз працює команда <b>${esc(i.foreign)}</b>. Видати цей квадрат не можна.</div>`;
+  }else if(leaf&&i.active){
+    act=`<button class="p big" onclick="dlg.close();closeRec(${D.records.indexOf(i.active)})">■ Закрити сьогодні · ${esc(i.active.agents.join(', ')||'без агента')}</button>`;
+  }else if(leaf){
+    const ags=activeAgents().map(a=>({a,r:agentOk(a.name,q),b:agentBusy(a.name).length})).sort((x,y)=>(y.r.ok-x.r.ok));
+    act=`<div class="qs-lbl">Видати сьогодні:</div><div class="chips">${ags.map(e=>
+      `<button class="chip${e.r.ok?'':' bad'}" title="${esc(e.r.why)}" onclick="quickStart(${js(q)},${js(e.a.name)})">${e.r.ok?'':'✕ '}${esc(e.a.name)}${e.b?` <i>${e.b}</i>`:''}</button>`).join('')
+      ||'<span class="muted">Немає агентів, які працюють.</span>'}</div>
+      ${ags.some(e=>!e.r.ok)?'<div class="muted" style="font-size:11.5px;margin-top:6px">✕ — уже працював тут</div>':''}`;
+  }else{
+    act=`<div class="qs-lbl">Частини (${i.total}, вільних ${i.ready}):</div><div class="chips">${kidsOf(q).map(k=>{const ki=qInfo(k);
+      return `<button class="chip" onclick="openQ(${js(k)})"><span class="dot" style="background:${COL[ki.cls]}"></span>${esc(k)}</button>`}).join('')}</div>`;
+  }
+  $('dlg-body').innerHTML=`
+    <div class="qs-head"><h2 id="dlg-title">Квадрат ${esc(q)}</h2><span class="stamp s-${i.cls}">${esc(i.txt)}</span></div>
+    <div class="qs-sub muted">${leaf&&i.active?`в роботі з ${fmt(i.active.start)} · ${dur(i.active.start,today())}`:leaf&&i.last?`відпочиває ${dur(i.last.end,today())} · востаннє ${fmt(i.last.end)}`:leaf?'записів ще немає':''}</div>
+    <div class="qs-act">${act}</div>
+    <details class="qs-more"><summary>Історія · ${recs.length}</summary>${hist}</details>
+    <details class="qs-more"><summary>Керування</summary><div class="bar" style="margin:8px 0 0">
+      ${!parentOf(q)?`<button class="xs" onclick="dlg.close();addSub(${js(q)})">+ підквадрат</button>`:''}
+      ${D.geo[q]?`<button class="xs" onclick="dlg.close();startEdit(${js(q)})">✎ межі</button>`:''}
+      <button class="xs" onclick="dlg.close();renameQ(${js(q)})">перейменувати</button>
+      <button class="d" onclick="dlg.close();delQ(${js(q)})">видалити</button></div></details>`;
+  dlg.showModal();
+}
+
+function centerOf(q){
+  const g=D.geo[q]||(parentOf(q)&&D.geo[parentOf(q)]);if(!g||!g.length)return null;
+  return [g.reduce((s,p)=>s+p[0],0)/g.length,g.reduce((s,p)=>s+p[1],0)/g.length];
+}
+function kmBetween(a,b){
+  const R=6371,r=x=>x*Math.PI/180,dLa=r(b[0]-a[0]),dLo=r(b[1]-a[1]);
+  const s=Math.sin(dLa/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+let planAll=false;
+function pickAgent(n){$('p-agent').value=n;planAll=false;plan()}
+function plan(){
+  const name=$('p-agent').value,out=$('p-out'),mode=($('p-sort')||{}).value||'near';
+  $('p-chips').innerHTML=activeAgents().map(a=>{const b=agentBusy(a.name).length;
+    return `<button class="chip${sameAgent(a.name,name||'')?' on':''}" onclick="pickAgent(${js(a.name)})">${esc(a.name)}${b?` <i>${b}</i>`:''}</button>`}).join('');
+  if(!name){out.innerHTML='<p class="muted">Оберіть агента — покажу найближчі вільні квадрати.</p>';return}
+  const busy=agentBusy(name);
+  // точка відліку: квадрат у роботі, інакше останній, де він працював
+  const mine=D.records.filter(r=>r.agents.some(x=>sameAgent(x,name)));
+  const ref=busy.length?busy.slice().sort((x,y)=>y.start.localeCompare(x.start))[0].q
+    :(mine.slice().sort((x,y)=>(y.end||y.start).localeCompare(x.end||x.start))[0]||{}).q;
+  const c0=ref?centerOf(ref):null;
+  const scored=leaves().map(qInfo).filter(i=>!i.active&&!i.foreign).map(i=>{
+    const ok=agentOk(name,i.q);
+    let sc=(i.cls==='free'||i.cls==='none')?3:i.cls==='soon'?2:0;
+    if(!ok.ok)sc=-1;
+    const c=centerOf(i.q),km=(c0&&c)?kmBetween(c0,c):null;
+    return{i,ok,score:sc,km}})
+    .sort((a,b)=>b.score-a.score||(mode==='near'&&c0
+      ?((a.km??1e9)-(b.km??1e9))
+      :((b.i.rest??999)-(a.i.rest??999))));
+  const note=mode!=='near'?'':c0
+    ?`<p class="muted">Відстань рахую від <b>${esc(ref)}</b> (${busy.length?'зараз у роботі':'останній квадрат агента'}). Спершу готові, потім умовні — у кожній групі від найближчого.</p>`
+    :`<p class="muted">${ref?`Для «${esc(ref)}» немає контуру на карті`:'Агент ще ніде не працював'} — відстань порахувати не можу, сортую за відпочинком.</p>`;
+  out.innerHTML=
+    (busy.length?`<p class="muted">Зараз у роботі: <b>${esc(busy.map(r=>r.q).join(', '))}</b> (з ${fmt(busy[0].start)}).</p>`:'')+note+
+    (scored.slice(0,planAll?1e9:12).map(s=>{const cl=s.score<0?'w-red':s.score===3?'w-grn':s.score===2?'w-yel':'w-red';
+      const rest=s.i.last?'відпочиває '+dur(s.i.last.end,today()):'записів немає';
+      const km=(mode==='near'&&s.km!=null)?`<span class="tag num">${s.km<1?Math.round(s.km*1000)+' м':s.km.toFixed(1).replace('.',',')+' км'}</span>`:'';
+      return `<div class="warn prow ${cl}"><div class="pt"><b class="num pq">${esc(s.i.q)}</b>${km}
+        <div class="pd">${rest} · ${esc(s.i.txt)}${s.ok.why?' · '+esc(s.ok.why):''}</div></div>
+        <button class="xs${s.score>=2?' p':''}" onclick="quickStart(${js(s.i.q)},${js(name)})">▶ Видати</button></div>`}).join('')
+    ||'<p class="muted">Вільних територій немає.</p>')+
+    (scored.length>12&&!planAll?`<button class="xs" style="width:100%" onclick="planAll=true;plan()">Показати всі (${scored.length})</button>`:'');
+}
+
+/* ── панель «Сьогодні», швидкі дії, прогноз ── */
+function addM(d,n){
+  const [y,m,dd]=d.split('-').map(Number),t=new Date(y,m-1+n,dd),p=x=>String(x).padStart(2,'0');
+  const last=new Date(y,m+n,0);                     // якщо день «переповнив» місяць — беремо його останній день
+  const r=t.getDate()!==dd?last:t;
+  return r.getFullYear()+'-'+p(r.getMonth()+1)+'-'+p(r.getDate());
+}
+const dayDiff=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
+function openGroups(){                              // відкриті записи; партія «весь квадрат» — одним рядком
+  const m=new Map();
+  D.records.forEach((r,i)=>{if(r.end)return;const k=r.grp||('i'+i);
+    if(!m.has(k))m.set(k,{idx:i,recs:[]});m.get(k).recs.push(r)});
+  return [...m.values()];
+}
+function renderToday(){
+  const el=$('today-panel');if(!el)return;
+  const td=today();
+  // 1. у роботі
+  const og=openGroups().sort((a,b)=>a.recs[0].start.localeCompare(b.recs[0].start));
+  const working=og.length?og.slice(0,8).map(g=>{
+    const r=g.recs[0],qs=g.recs.map(x=>x.q).sort((a,b)=>sortKey(a).localeCompare(sortKey(b),'uk',{numeric:true}));
+    const label=g.recs.length>1&&r.src?`${esc(r.src)} (весь, ${qs.length})`:qs.map(esc).join(', ');
+    return `<div class="trow"><div><b class="num">${label}</b>
+      ${r.agents.map(n=>{const a=findAgent(n);return `<span class="tag"${a&&a.left?' style="text-decoration:line-through" title="не працює"':''}>${esc(n)}</span>`}).join('')||'<span class="tag">без агента</span>'}<br>
+      <span class="muted">з ${fmt(r.start)} · ${dur(r.start,td)}</span></div>
+      <button class="xs" onclick="closeRec(${g.idx})">■ Закрити сьогодні</button></div>`}).join('')+(og.length>8?`<p class="muted">…і ще ${og.length-8}</p>`:'')
+    :'<p class="muted">Зараз ніхто не в роботі.</p>';
+  // 2. потребує уваги
+  const att=[];
+  activeAgents().forEach(a=>{
+    if(agentBusy(a.name).length)return;
+    const ends=D.records.filter(r=>r.end&&r.agents.some(x=>sameAgent(x,a.name))).map(r=>r.end).sort();
+    if(!ends.length)return;
+    const d=dayDiff(ends[ends.length-1],td);
+    if(d>=14)att.push(['w-yel',`<b>${esc(a.name)}</b> без квадрата вже ${dur(ends[ends.length-1],td)}. Не працює? Позначте у вкладці «Агенти».`]);
+  });
+  og.forEach(g=>{const d=dayDiff(g.recs[0].start,td);
+    if(d>45)att.push(['w-yel',`Запис <b>${esc(g.recs.map(x=>x.q).join(', '))}</b> відкритий уже ${dur(g.recs[0].start,td)}. Ще в роботі?`])});
+  og.forEach(g=>{const ags=g.recs[0].agents;
+    if(ags.length&&ags.every(n=>{const a=findAgent(n);return a&&a.left}))
+      att.push(['w-yel',`Запис <b>${esc(g.recs.map(x=>x.q).join(', '))}</b> відкритий, а агент вже не працює. Закрийте його.`])});
+  const noGeo=leaves().filter(q=>!D.geo[q]);
+  if(noGeo.length)att.push(['w-yel',`Без контуру на карті: <b>${esc(noGeo.slice(0,8).join(', '))}</b>${noGeo.length>8?' і ще '+(noGeo.length-8):''}.`]);
+  const attention=att.length?att.map(([c,t])=>`<div class="warn ${c}">${t}</div>`).join(''):'<div class="warn w-grn">Усе гаразд.</div>';
+  const mob=isMob();
+  // 3. черга і прогноз
+  const L_=leaves().map(qInfo).filter(i=>!i.active&&!i.foreign);
+  const ready=L_.filter(i=>i.cls==='free'||i.cls==='none'||i.cls==='soon')
+    .sort((a,b)=>(a.cls==='soon')-(b.cls==='soon')||(b.rest??9999)-(a.rest??9999));
+  const soonList=L_.filter(i=>i.cls==='block'&&i.last)
+    .map(i=>({i,min:addM(i.last.end,D.settings.min),ideal:addM(i.last.end,D.settings.ideal)}))
+    .sort((a,b)=>a.min.localeCompare(b.min)).slice(0,5);
+  const fd=forecastData();
+  const queue=
+    `<p class="muted num" style="margin:0 0 8px">МОЖНА РОЗДАВАТИ: ${fd.ready.length}${fd.rate>0?` · ТЕМП ≈ ${fd.rate.toFixed(1)}/МІС`:''}${fd.s0?` · ЗАКІНЧАТЬСЯ ≈ ${fmt(fd.s0.day)}`:''}</p>`+
+    (ready.slice(0,6).map(i=>`<div class="trow"><div><b class="num">${esc(i.q)}</b>
+      <span class="stamp s-${i.cls}">${esc(i.txt)}</span> <span class="muted">${i.last?'відпочив '+dur(i.last.end,td):'записів немає'}</span></div>
+      <button class="xs" onclick="openQ(${js(i.q)})">Відкрити</button></div>`).join('')||'<p class="muted">Готових немає.</p>')+
+    (ready.length>6?`<p class="muted">…і ще ${ready.length-6}</p>`:'')+
+    (soonList.length?`<p class="muted num" style="margin:12px 0 6px">НАЙБЛИЖЧІ ДО ГОТОВНОСТІ</p>`+
+      soonList.map(s=>`<div class="trow"><div><b class="num">${esc(s.i.q)}</b>
+        <span class="muted">мін. з <b>${fmt(s.min)}</b> · ідеал з ${fmt(s.ideal)}</span></div></div>`).join(''):'');
+  if(mob){
+    // групуємо за агентом: на головній — коротко, повний список — у вікні
+    const byAg=workGroups(og);
+    const rows=byAg.slice(0,3).map(G=>`<div class="mrow" onclick="workDlg(${js(G.name)})" style="cursor:pointer">
+        <b class="mq num">${G.items.length}</b>
+        <div class="mw">${G.left?`<span class="gone">${esc(G.name)}</span>`:esc(G.name)}<small>${esc(G.items.map(x=>x.label).sort((x,y)=>sortKey(x).localeCompare(sortKey(y),'uk',{numeric:true})).join(', ')).slice(0,60)}${G.items.length>4?'…':''} · ${dur(G.oldest,td)}</small></div>
+        <span class="mgo-arrow">›</span></div>`).join('')
+      +(byAg.length>3?`<button class="xs mall" onclick="workDlg()">Усі в роботі · ${og.length} — ${byAg.length} агентів ›</button>`:'')
+      ||'<p class="muted" style="margin:6px 0">Зараз ніхто не в роботі.</p>';
+    const warnN=att.length;
+    window._att=attention;
+    el.innerHTML=`<div class="mcard"><div class="mhead"><b>У роботі · ${og.length}</b>
+      ${warnN?`<button class="xs matt-btn" onclick="showAtt()" aria-label="Нагадування: ${warnN}">⚠ ${warnN}</button>`:''}
+      <button class="p xs mgo" onclick="goTab('plan')">▶ Видати</button></div>${rows}</div>`;
+    setTimeout(fitMapM,0);
+    return;
+  }
+  el.innerHTML=`<div class="tgrid">
+    <div class="panel tcol"><h2>У роботі · ${og.length}</h2>${working}</div>
+    <div class="panel tcol"><h2>Потребує уваги</h2>${attention}</div>
+    <div class="panel tcol"><h2>Далі в черзі</h2>${queue}</div></div>`;
+}
+function closeRec(idx){
+  const r=D.records[idx];if(!r)return;
+  if(r.start>today()){alert('Початок у майбутньому — виправте запис через ✎ в «Історії».');return}
+  if(editRef===r||(r.grp&&editGrp===r.grp))resetForm();
+  const snap=snapRec(),targets=r.grp?D.records.filter(x=>x.grp===r.grp&&!x.end):[r];
+  targets.forEach(x=>{x.end=today()});
+  save();hap('ok');toast(`Закрито: ${targets.map(x=>x.q).join(', ')}`,snap);
+}
+async function quickStart(q,who){
+  const name=who||($('qs-agent')||{}).value;
+  if(!name){alert('Оберіть агента');return}
+  const i=qInfo(q);
+  if(i.active){alert('У цьому квадраті вже є незакритий запис.');return}
+  if(i.foreign){alert('У цьому квадраті зараз працює команда '+i.foreign+'.');return}
+  if(i.cls==='block'&&!await ask(`«${q}» ще не відпочив: пройшло ${dur(i.last.end,today())}, потрібно не менше ${D.settings.min} міс. Все одно видати?`))return;
+  const ok=agentOk(name,q);
+  if(!ok.ok&&!await ask(`${name}: ${ok.why}. Все одно видати?`))return;
+  const snap=snapRec();
+  D.records.push({q,start:today(),end:null,agents:[canonName(name)],note:''});
+  if($('dlg').open)dlg.close();save();hap('ok');
+  toast(`${q} → ${name}`,snap);
+}
+
+/* ── стажери, швидкість, прогноз ── */
+const dateAdd=(d,n)=>{const t=new Date(d+'T00:00:00');t.setDate(t.getDate()+n);
+  const p=x=>String(x).padStart(2,'0');return t.getFullYear()+'-'+p(t.getMonth()+1)+'-'+p(t.getDate())};
+const median=a=>{if(!a.length)return null;const s=a.slice().sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+function toggleTrainee(i){
+  const a=D.agents[i];if(!a)return;
+  if(a.trainee){a.trainee=false;a.traineeUntil=today()}else{a.trainee=true;a.traineeUntil=''}
+  save();
+}
+const isTraineeAt=(name,date)=>{const a=findAgent(name);return !!a&&(a.trainee||(!!a.traineeUntil&&date<=a.traineeUntil))};
+function speedStats(){
+  const units=new Map();
+  D.records.forEach((r,i)=>{if(!r.end||r.part)return;const k=r.grp||('i'+i);
+    if(!units.has(k))units.set(k,{recs:[]});units.get(k).recs.push(r)});
+  const res=Object.create(null);let skipped=0;
+  units.forEach(u=>{
+    const r=u.recs[0],days=Math.max(1,dayDiff(r.start,r.end)),per=days/u.recs.length;
+    const trainees=r.agents.filter(n=>isTraineeAt(n,r.start));
+    const mentors=r.agents.filter(n=>!trainees.includes(n));
+    if(mentors.length!==1){skipped++;return}
+    const key=canonName(mentors[0]);
+    res[key]=res[key]||{solo:[],team:[]};
+    res[key][(trainees.length||/стаж/i.test(r.note||''))?'team':'solo'].push(per);
+  });
+  return{res,skipped};
+}
+function renderSpeed(){
+  const el=$('speed');if(!el)return;
+  const {res,skipped}=speedStats();
+  const rows=D.agents.filter(a=>res[a.name]).map(a=>{
+    const s=res[a.name],rd1=v=>v<10?Math.round(v*10)/10:Math.round(v),f=x=>x.length?`<b class="num">${rd1(median(x))}</b> дн. <span class="muted">(${x.length})</span>`:'<span class="muted">—</span>';
+    return `<tr class="${a.left?'dim':''}"><td><b>${esc(a.name)}</b></td><td>${f(s.solo)}</td><td>${f(s.team)}</td></tr>`}).join('');
+  el.innerHTML=rows?`<table><tr><th>Агент</th><th>Соло · медіана на підквадрат</th><th>Зі стажером</th></tr>${rows}</table>
+    <p class="muted">У дужках — скільки закритих підквадратів. Записи «весь квадрат» діляться порівну. Записи з позначкою «частково» не враховуються${skipped?`; пропущено записів без єдиного основного агента (лише стажер або кілька): ${skipped}`:''}. Запис, у примітці якого є «стаж…», рахується як «зі стажером». Стажерів позначайте у списку агентів.</p>`
+    :'<p class="muted">Поки немає закритих записів з одним основним агентом.</p>';
+}
+function forecastData(){
+  const td=today();
+  const L_=leaves().map(qInfo).filter(i=>!i.active&&!i.foreign);
+  const ready=L_.filter(i=>i.cls==='free'||i.cls==='none'||i.cls==='soon');
+  const waiting=L_.filter(i=>i.cls==='block'&&i.last)
+    .map(i=>({i,min:addM(i.last.end,D.settings.min),ideal:addM(i.last.end,D.settings.ideal)}))
+    .sort((a,b)=>a.min.localeCompare(b.min));
+  const since=addM(td,-3);
+  const rate=D.records.filter(r=>r.start>=since&&!r.part).length/3;
+  // симуляція: запас + території, що дозрівають, мінус витрата з нинішнім темпом
+  const sim=m=>{
+    const dates=waiting.map(w=>addM(w.i.last.end,m)).sort();
+    for(let d=0;d<=730;d++){
+      const day=dateAdd(td,d),ripened=dates.filter(x=>x<=day).length;
+      if(ready.length+ripened-rate*d/30.4<1)return{day,ripened};
+    }
+    return null;
+  };
+  return{td,ready,waiting,rate,sim,total:leaves().length,s0:(rate>0&&ready.length)?sim(D.settings.min):null};
+}
+function renderForecast(){
+  const el=$('fc-tbl');if(!el)return;
+  const F=forecastData(),td=F.td;
+  let warn='';
+  if(F.rate>0){
+    const cycle=F.total/F.rate;
+    const info=`<br><span class="muted">Повне коло з ${F.total} підквадратів за такого темпу ≈ <b>${Math.round(cycle)}</b> міс.; ідеальний відпочинок — ${D.settings.ideal} міс.${cycle<D.settings.ideal?' Темп занадто високий: території не встигатимуть відпочити.':''} Території, що зараз у роботі, у прогнозі не враховані.</span>`;
+    if(!F.ready.length){
+      warn=`<div class="warn w-red">Готових територій немає${F.waiting[0]?`. Найближча — <b>${esc(F.waiting[0].i.q)}</b> з <b>${fmt(F.waiting[0].min)}</b>`:''}.${info}</div>`;
+    }else if(F.s0){
+      const mo=dayDiff(td,F.s0.day)/30.4,cls=mo<6?'w-red':mo<12?'w-yel':'w-grn';
+      const alts=mo<12?[D.settings.min-1,D.settings.min-2].filter(m=>m>=1).map(m=>({m,s:F.sim(m)}))
+        .filter(x=>!x.s||x.s.day!==F.s0.day):[];
+      const alt=alts.length?`<br><span class="muted">Якщо знизити мінімум: ${alts.map(x=>`${x.m} міс — ${x.s?'до '+fmt(x.s.day):'понад 2 роки'}`).join('; ')}.</span>`:'';
+      warn=`<div class="warn ${cls}">Якщо темп не зміниться (≈${F.rate.toFixed(1)} підквадрата на місяць), території, які можна роздавати, закінчаться приблизно <b>${fmt(F.s0.day)}</b> (враховано ${F.s0.ripened}, що дозріють до цього часу).${alt}${info}</div>`;
+    }else warn=`<div class="warn w-grn">За нинішнього темпу (≈${F.rate.toFixed(1)}/міс) запасу й територій, що дозрівають, вистачає щонайменше на 2 роки.${info}</div>`;
+  }
+  $('fc-warn').innerHTML=warn;
+  el.innerHTML=`<tr><th>Територія</th><th>Ост. закрита</th><th>Мін. з</th><th>Ідеал з</th><th>До мінімуму</th></tr>`+
+    F.waiting.map(w=>`<tr><td class="num"><b>${esc(w.i.q)}</b></td><td class="num">${fmt(w.i.last.end)}</td>
+      <td class="num">${fmt(w.min)}</td><td class="num">${fmt(w.ideal)}</td>
+      <td class="num">${dayDiff(td,w.min)>0?dur(td,w.min):'вже'}</td></tr>`).join('')||'<tr><td colspan=5 class="muted">Усі території вже готові або без записів.</td></tr>';
+}
+
+/* ── журнал: додати / редагувати ──────────── */
+let editRef=null,editGrp=null;
+const uid=()=>'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function syncAllBox(){                       // галочка «весь квадрат» — лише коли є підквадрати
+  const q=$('f-q').value,ks=q?kidsOf(q):[];
+  if(ks.length){
+    $('f-allbox').style.display='';
+    $('f-all-txt').innerHTML=`Опрацьовано <b>весь квадрат ${esc(q)}</b> — рознести ці дати на всі ${ks.length} підквадратів (${esc(ks.join(', '))})`;
+  }else{$('f-allbox').style.display='none';$('f-all').checked=false}
+}
+function skipSet(){                          // записи, які зараз редагуються, у перевірках ігноруємо
+  const s=new Set();
+  if(editGrp)D.records.forEach(r=>{if(r.grp===editGrp)s.add(r)});
+  else if(editRef)s.add(editRef);
+  return s;
+}
+function clashes(units,s,e,skip){            // накладення періодів в одному й тому ж квадраті
+  return units.filter(u=>D.records.some(r=>r.q===u&&!skip.has(r)&&(r.end||'9999-12-31')>=s&&(e||'9999-12-31')>=r.start));
+}
+async function addRec(){
+  const q=$('f-q').value,s=$('f-s').value,e=$('f-e').value;
+  if(!q||!s){alert('Вкажіть квадрат і дату початку');return}
+  if(e&&e<s){alert('Кінець раніше початку — перевірте дати.');return}
+  if(e&&e>today()){alert('Кінець у майбутньому. Залиште поле порожнім, якщо агент ще працює, або виправте дату.');return}
+  if(s>today()){alert('Початок у майбутньому. Вкажіть сьогоднішню чи минулу дату.');return}
+  const ks=kidsOf(q),spread=!!(ks.length&&$('f-all').checked);
+  if(ks.length&&!spread&&!await ask(`«${q}» має підквадрати, а галочку «опрацьовано весь квадрат» не поставлено.\nЗапис повисне на групі й не вплине на статуси підквадратів. Все одно додати?`))return;
+  const units=spread?ks:[q],skip=skipSet();
+  const cl=clashes(units,s,e,skip);
+  if(cl.length&&!await ask(`Цей період накладається на наявні записи в: ${cl.join(', ')}.\nВсе одно зберегти?`))return;
+  const raw=$('f-a').value.split(',').map(x=>x.trim()).filter(Boolean);
+  const agents=[...new Map(raw.map(n=>[normName(n),canonName(n)])).values()];
+  const unknown=agents.filter(n=>!findAgent(n));
+  if(unknown.length&&!await ask(`Невідомі імена: ${unknown.join(', ')}.\nСтворити нових агентів? Якщо це помилка друку — натисніть «Скасувати» і виправте.`))return;
+  const note=$('f-note').value.trim(),part=$('f-part').checked;
+  if(editGrp)D.records=D.records.filter(r=>r.grp!==editGrp);
+  else if(editRef)D.records=D.records.filter(r=>r!==editRef);
+  if(spread){const g=editGrp||uid();
+    ks.forEach(k=>D.records.push(Object.assign({q:k,start:s,end:e||null,agents,note,grp:g,src:q},part?{part:true}:{})));
+  }else D.records.push(Object.assign({q,start:s,end:e||null,agents,note},part?{part:true}:{}));
+  agents.forEach(n=>{if(!findAgent(n))D.agents.push({name:n,start:'',left:false,leftDate:'',trainee:false,traineeUntil:''})});
+  resetForm();save();
+}
+function resetForm(){editRef=null;editGrp=null;
+  $('f-a').value='';$('f-note').value='';$('f-e').value='';$('f-all').checked=false;$('f-part').checked=false;
+  $('f-warn').innerHTML='';
+  $('btn-rec').textContent='Додати';
+  $('btn-cancel').style.display='none';syncAllBox()}
+function editRec(i){
+  const r=D.records[i];if(!r)return;
+  $('f-panel').classList.add('open');
+  editRef=r.grp?null:r;editGrp=r.grp||null;
+  $('f-q').value=r.grp?r.src:r.q;
+  $('f-s').value=r.start;$('f-e').value=r.end||'';
+  $('f-a').value=r.agents.join(', ');$('f-note').value=r.note||'';
+  syncAllBox();$('f-all').checked=!!r.grp;$('f-part').checked=!!r.part;
+  $('btn-rec').textContent=r.grp?`Зберегти · усі ${D.records.filter(x=>x.grp===r.grp).length}`:'Зберегти зміни';
+  $('btn-cancel').style.display='';
+  document.querySelector('.tab[data-v="hist"]').click();
+  window.scrollTo({top:0,behavior:'smooth'});checkForm();
+}
+function checkForm(){
+  const q=$('f-q').value,s=$('f-s').value,e=$('f-e').value,w=$('f-warn');
+  if(!q||!s){w.innerHTML='';return}
+  const ks=kidsOf(q),spread=!!(ks.length&&$('f-all').checked);
+  const units=spread?ks:[q];
+  const agents=$('f-a').value.split(',').map(x=>x.trim()).filter(Boolean);
+  const skip=skipSet();
+  let h='',worst=Infinity,worstTxt='',bad=[];
+  if(e&&e<s)h+=`<div class="warn w-red">Кінець раніше початку.</div>`;
+  if(e&&e>today())h+=`<div class="warn w-red">Кінець у майбутньому — залиште порожнім, якщо ще працює.</div>`;
+  const cl=clashes(units,s,e,skip);
+  if(cl.length)h+=`<div class="warn w-yel">Період накладається на наявні записи в: <b>${esc(cl.join(', '))}</b>.</div>`;
+  agents.forEach(n=>{const a=findAgent(n);if(a&&a.left)h+=`<div class="warn w-yel">${esc(a.name)} позначений як «не працює».</div>`});
+  units.forEach(u=>{
+    const past=D.records.filter(r=>r.q===u&&r.end&&r.end<s&&!skip.has(r))
+      .sort((a,b)=>a.end.localeCompare(b.end)).slice(-1)[0];
+    if(past){const m=months(past.end,s);
+      if(m<worst){worst=m;worstTxt=dur(past.end,s)}
+      if(m<D.settings.ideal)bad.push({u,m,d:dur(past.end,s)})}
+    agents.forEach(n=>{
+      const r=agentOkX(n,u,skip);
+      if(!r.ok)h+=`<div class="warn w-red">${esc(n)} · <b>${esc(u)}</b>: ${esc(r.why)} — краще інша територія.</div>`});
+  });
+  if(worst<Infinity){
+    if(!bad.length)h=`<div class="warn w-grn">Відпочинок ${units.length>1?'усюди ':''}від ${worstTxt} — ідеально.</div>`+h;
+    else{
+      const crit=bad.filter(b=>b.m<D.settings.min);
+      const lst=b=>b.map(x=>`${esc(x.u)} — ${x.d}`).join('; ');
+      if(crit.length)h=`<div class="warn w-red">Зарано: ${lst(crit)} — менше мінімальних ${D.settings.min}!</div>`+h;
+      const soft=bad.filter(b=>b.m>=D.settings.min);
+      if(soft.length)h=`<div class="warn w-yel">Прийнятно, але менше ${D.settings.ideal}: ${lst(soft)}.</div>`+h;
+    }
+  }
+  if(spread)h=`<div class="warn w-yel">Буде створено <b>${ks.length}</b> записів — по одному на кожен підквадрат.</div>`+h;
+  w.innerHTML=h;
+}
+['f-q','f-s','f-a','f-e'].forEach(id=>$(id).addEventListener('input',()=>{syncAllBox();checkForm()}));
+$('f-all').addEventListener('change',checkForm);
+async function del(i){
+  const r=D.records[i];if(!r)return;
+  const snap=snapRec();
+  if(r.grp){
+    const n=D.records.filter(x=>x.grp===r.grp).length;
+    if(!await ask(`Це частина партії «весь квадрат ${r.src}» — ${n} записів. Видалити всі?`))return;
+    if(editGrp===r.grp)resetForm();
+    D.records=D.records.filter(x=>x.grp!==r.grp);save();toast('Записи видалено',snap);return;
+  }
+  if(!await ask('Видалити запис?'))return;
+  if(editRef===r)resetForm();
+  D.records.splice(i,1);save();toast('Запис видалено',snap);
+}
+async function addAgent(){
+  const n=$('a-name').value.trim();if(!n)return;
+  if(badName(n)||!normName(n)){alert('Ім\'я не може бути порожнім, зарезервованим чи містити лапки, < > & \\');return}
+  const st=$('a-start').value,left=$('a-left').checked,trainee=$('a-trainee').checked;
+  const ex=findAgent(n);
+  if(ex){
+    if(ex.name!==n&&!await ask(`«${n}» — це той самий агент, що «${ex.name}». Оновити його дані?`)){$('a-name').value='';return}
+    if(st)ex.start=st;
+    if(trainee){ex.trainee=true;ex.traineeUntil=''}
+    if(left&&!ex.left){ex.left=true;ex.leftDate=today()}
+  }else D.agents.push({name:n,start:st,left,leftDate:left?today():'',trainee,traineeUntil:''});
+  $('a-name').value='';$('a-start').value='';$('a-left').checked=false;$('a-trainee').checked=false;save();
+}
+async function delA(i){
+  const a=D.agents[i];if(!a)return;
+  const n=D.records.filter(r=>r.agents.some(x=>sameAgent(x,a.name))).length,open=agentBusy(a.name).length;
+  if(!await ask(`Видалити «${a.name}» зі списку?`+(n?`\nЙого ім'я лишиться в ${n} записах історії. Якщо людина просто пішла — краще натиснути «не працює».`:'')+(open?`\nУвага: у нього ${open} незакритих записів.`:'')))return;
+  D.agents.splice(i,1);save();
+}
+function pushAgent(n){
+  const cur=$('f-a').value.split(',').map(x=>x.trim()).filter(Boolean);
+  if(cur.some(x=>sameAgent(x,n)))return;
+  cur.push(n);$('f-a').value=cur.join(', ');checkForm();
+}
+function saveSet(){
+  const v=id=>parseInt($(id).value,10);
+  const s={ideal:v('s-ideal'),min:v('s-min'),tenure:D.settings.tenure,repeat:$('s-repeat').checked};
+  if([s.ideal,s.min].some(x=>isNaN(x)||x<0)){alert('Впишіть числа, не менше нуля.');return}
+  if(s.min>s.ideal){alert('Мінімальний відпочинок не може бути більшим за ідеальний.');return}
+  D.settings=s;save();
+}
+
+/* ── запуск ───────────────────────────────── */
+document.querySelectorAll('.panel.fold>h2').forEach(h=>h.addEventListener('click',()=>{if(isMob())h.parentNode.classList.toggle('open')}));
+const isMob=()=>!!(window.matchMedia&&window.matchMedia('(max-width:700px)').matches);
+function goTab(v){hap();const t=document.querySelector(`.tab[data-v="${v}"]`);if(t)t.click();if($('dlg').open)dlg.close();window.scrollTo(0,0)}
+function syncBnav(v){setTimeout(tgBack,0);document.querySelectorAll('#bnav button').forEach(b=>b.classList.toggle('on',b.dataset.b===v||(b.dataset.b==='more'&&['tiles','forecast','set'].includes(v))))}
+/* ── тема ── */
+function themeMode(){try{return localStorage.getItem('kv_theme')||'auto'}catch(_){return 'auto'}}
+function applyTheme(){
+  const m=themeMode();
+  const dark=m==='dark'||(m==='auto'&&(TG?TG.colorScheme==='dark':!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)));
+  document.documentElement.classList.toggle('dark',dark);
+  const c=dark?'#14171C':'#F1EADC';
+  const mt=document.querySelector('meta[name=theme-color]');if(mt)mt.content=c;
+  try{if(TG&&TG.isVersionAtLeast('6.1')){TG.setHeaderColor(c);TG.setBackgroundColor(c)}
+      if(TG&&TG.isVersionAtLeast('7.10')&&TG.setBottomBarColor)TG.setBottomBarColor(dark?'#1A1E24':'#FBF7EF')}catch(e){}
+  const s=$('s-theme');if(s)s.value=m;
+}
+function setTheme(v){try{localStorage.setItem('kv_theme',v)}catch(_){}applyTheme()}
+if(window.matchMedia)try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme)}catch(_){}
+applyTheme();
+
+/* ── місячний звіт ── */
+const MONTHS=['січень','лютий','березень','квітень','травень','червень','липень','серпень','вересень','жовтень','листопад','грудень'];
+function reportText(ym){
+  const from=ym+'-01',to=ym+'-31',inM=d=>!!d&&d>=from&&d<=to,[y,m]=ym.split('-').map(Number);
+  const units=a=>new Set(a.map(r=>r.grp||r)).size;
+  const started=D.records.filter(r=>inM(r.start)),closed=D.records.filter(r=>inM(r.end));
+  const per={};
+  closed.forEach(r=>r.agents.forEach(a=>{const k=canonName(a);(per[k]=per[k]||{n:0,days:[]}).n++;if(!r.part)per[k].days.push(dayDiff(r.start,r.end)+1)}));
+  const ripe=leaves().map(qInfo).filter(i=>i.last&&!i.active&&inM(addM(i.last.end,D.settings.min))).map(i=>i.q);
+  const work=openGroups().length,fd=forecastData();
+  const L=[];
+  L.push(`📍 Квадрати — звіт за ${MONTHS[m-1]} ${y}`);
+  L.push('');
+  L.push(`Видано: ${units(started)} (підквадратів ${started.length})`);
+  L.push(`Закрито: ${units(closed)} (підквадратів ${closed.length})`);
+  const ag=Object.entries(per).sort((a,b)=>b[1].n-a[1].n);
+  if(ag.length){L.push('');L.push('По агентах:');
+    ag.forEach(([n,v])=>{const md=median(v.days);L.push(`• ${n} — ${v.n} підкв.${md?`, медіана ${Math.round(md)} дн.`:''}`)})}
+  L.push('');
+  L.push(`Дозріло за місяць (мін. ${D.settings.min} міс): ${ripe.length?ripe.join(', '):'—'}`);
+  if(ym===today().slice(0,7)){
+    L.push(`Зараз у роботі: ${work}`);
+    L.push(`Можна роздавати: ${fd.ready.length}${fd.s0?` · закінчаться ≈ ${fmt(fd.s0.day)}`:''}`);
+  }
+  return L.join('\n');
+}
+function reportDlg(ym){
+  const now=today().slice(0,7),opts=[];
+  for(let k=0;k<6;k++){const d=new Date(+now.slice(0,4),+now.slice(5)-1-k,1);const v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');opts.push(v)}
+  ym=ym||now;const txt=reportText(ym);
+  $('dlg-body').innerHTML=`<h2 id="dlg-title">Звіт за місяць</h2>
+    <select onchange="reportDlg(this.value)" style="margin:6px 0 10px">${opts.map(v=>`<option value="${v}"${v===ym?' selected':''}>${MONTHS[+v.slice(5)-1]} ${v.slice(0,4)}</option>`).join('')}</select>
+    <textarea id="rep-t" readonly style="width:100%;height:260px;font:13px/1.45 var(--body)">${esc(txt)}</textarea>
+    <div class="bar" style="margin-top:10px"><button class="p" id="rep-t-ok" onclick="copyText('rep-t')">Копіювати</button>
+      ${TG?`<button onclick="shareReport()">Надіслати в Telegram</button>`:''}</div>`;
+  if(!$('dlg').open)dlg.showModal();
+}
+function shareReport(){
+  const t=$('rep-t').value;
+  try{TG.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(' ')+'&text='+encodeURIComponent(t))}catch(e){copyText('rep-t');toast('Скопійовано — вставте в чат')}
+}
+
+/* ══════════ СПІЛЬНА БАЗА (Supabase) ══════════
+   Сервер перевіряє підпис Telegram і віддає лише дозволене:
+   свої записи й агенти — повністю; чужі квадрати — лише «в роботі · менеджер» і дату останнього закриття. */
+let CITY=null,ROLE=null,ME=null,PEOPLE={},EXT={},BASE=null,CITIES=[],IS_ADMIN=false,syncT=null,syncing=false,srvDirty=false;
+const FULL=()=>ROLE==='admin'||ROLE==='lead';
+const ownerTag=r=>(SRV&&FULL()&&r.owner&&r.owner!==ME)?` <span class="tag own">${esc(PEOPLE[r.owner]||'інший')}</span>`:'';
+async function api(action,body){
+  let r;
+  try{r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:TG.initData,action,...(body||{})})})}
+  catch(e){const x=new Error('Немає зв’язку з сервером');x.code='net';throw x}
+  const j=await r.json().catch(()=>({error:'net',message:'Сервер не відповів'}));
+  if(!r.ok||j.error){const x=new Error(j.message||'Помилка сервера');x.code=j.error;throw x}
+  return j;
+}
+const viewKey=()=>'kv_view_'+CITY;
+function fromServer(res){
+  const d=clone(DEF);
+  d.settings={...DEF.settings,...(res.city.settings||{})};
+  d.quadrants=res.quadrants.map(x=>x.name).sort((a,b)=>sortKey(a).localeCompare(sortKey(b),'uk',{numeric:true}));
+  d.geo={};res.quadrants.forEach(x=>{if(Array.isArray(x.geo)&&x.geo.length>=3)d.geo[x.name]=x.geo});
+  d.records=res.records.map(r=>{const o={id:r.id,owner:r.owner,q:r.q,start:r.start,end:r.end||null,agents:r.agents||[],note:r.note||''};
+    if(r.part)o.part=true;if(r.grp){o.grp=r.grp;o.src=r.src}return o});
+  d.agents=res.agents.map(a=>({id:a.id,owner:a.owner,name:a.name,start:a.start||'',left:!!a.left,leftDate:a.left_date||'',trainee:!!a.trainee,traineeUntil:a.trainee_until||''}));
+  let v=null;try{v=JSON.parse(localStorage.getItem(viewKey())||'null')}catch(_){}
+  d.view=v&&v.c?v:{c:res.city.center||DEF.view.c,z:res.city.zoom||12};
+  d.tile=v&&Number.isInteger(v.t)?v.t:0;d.lastExport=today();
+  return d;
+}
+function applyServer(res,replace){
+  ROLE=res.role;ME=res.me;PEOPLE=res.people||{};EXT={};(res.others||[]).forEach(o=>EXT[o.q]=o);
+  const sd=fromServer(res);BASE=clone(sd);
+  if(replace){D=sd;persistLocal();render();applyRole()}
+}
+const recKey=r=>JSON.stringify([r.q,r.start,r.end||null,r.agents||[],r.note||'',!!r.part,r.grp||null,r.src||null]);
+const agKey=a=>JSON.stringify([a.name,a.start||'',!!a.left,a.leftDate||'',!!a.trainee,a.traineeUntil||'']);
+function srvDiff(){
+  if(!BASE)return null;
+  const uid=()=>crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16)});
+  D.records.forEach(r=>{if(!r.id)r.id=uid()});D.agents.forEach(a=>{if(!a.id)a.id=uid()});
+  const o={records:{upsert:[],del:[]},agents:{upsert:[],del:[]},quadrants:{upsert:[],del:[]}};
+  const bR=new Map(BASE.records.map(r=>[r.id,recKey(r)])),nR=new Set();
+  D.records.forEach(r=>{nR.add(r.id);if(bR.get(r.id)!==recKey(r))o.records.upsert.push(r)});
+  bR.forEach((_,id)=>{if(!nR.has(id))o.records.del.push(id)});
+  const bA=new Map(BASE.agents.map(a=>[a.id,agKey(a)])),nA=new Set();
+  D.agents.forEach(a=>{nA.add(a.id);if(bA.get(a.id)!==agKey(a))o.agents.upsert.push(a)});
+  bA.forEach((_,id)=>{if(!nA.has(id))o.agents.del.push(id)});
+  const bQ=new Map(BASE.quadrants.map(q=>[q,JSON.stringify(BASE.geo[q]||null)]));
+  D.quadrants.forEach(q=>{if(bQ.get(q)!==JSON.stringify(D.geo[q]||null))o.quadrants.upsert.push({name:q,geo:D.geo[q]||null})});
+  bQ.forEach((_,q)=>{if(!D.quadrants.includes(q))o.quadrants.del.push(q)});
+  if(JSON.stringify(D.settings)!==JSON.stringify(BASE.settings))o.settings=D.settings;
+  const n=o.records.upsert.length+o.records.del.length+o.agents.upsert.length+o.agents.del.length+o.quadrants.upsert.length+o.quadrants.del.length;
+  return n||o.settings?o:null;
+}
+function srvSave(){if(!BASE)return;srvDirty=true;cloudMark('save');clearTimeout(syncT);syncT=setTimeout(srvSync,700)}
+async function srvSync(){
+  if(syncing){clearTimeout(syncT);syncT=setTimeout(srvSync,400);return}
+  const ch=srvDiff();
+  if(!ch){srvDirty=false;cloudMark('ok');return}
+  syncing=true;srvDirty=false;
+  try{
+    const res=await api('sync',{city:CITY,...ch});
+    applyServer(res,!srvDirty);cloudAt=Date.now();cloudErr='';
+    if(srvDirty)srvSave();else cloudMark('ok');
+  }catch(e){
+    cloudErr=e.message;
+    if(e.code==='busy'||e.code==='forbidden'||e.code==='db'||e.code==='bad'){toast(e.message);syncing=false;await srvLoad(true);return}
+    cloudMark(e.code==='net'||navigator.onLine===false?'offline':'err');
+    clearTimeout(syncT);syncT=setTimeout(srvSync,20000);
+  }
+  syncing=false;
+}
+async function srvLoad(force){
+  if(!CITY)return;
+  if(!force&&(srvDirty||syncing||drawing||editing||$('dlg').open))return;
+  try{const res=await api('load',{city:CITY});applyServer(res,true);cloudAt=Date.now();cloudErr='';cloudMark('ok')}
+  catch(e){cloudErr=e.message;cloudMark(e.code==='net'?'offline':'err');if(e.code==='forbidden')srvInit()}
+}
+function applyRole(){
+  const b=$('citybtn');if(b){const c=CITIES.find(x=>x.id===CITY);b.textContent=(c?c.name:'Місто')+(CITIES.length>1?' ▾':'');b.style.display=''}
+  const full=FULL();
+  ['s-ideal','s-min','s-repeat'].forEach(id=>{const e=$(id);if(e)e.disabled=!full});
+  document.body.classList.toggle('srv-manager',!full);
+}
+function gate(title,text,extra){
+  let g=$('gate');if(!g){g=document.createElement('div');g.id='gate';document.body.appendChild(g)}
+  g.innerHTML=`<div class="gate-box"><h2>${title}</h2><p>${text}</p>${extra||''}<button class="p" onclick="location.reload()">⟳ Перевірити ще раз</button></div>`;
+}
+async function srvInit(){
+  document.body.classList.add('srv');
+  cloudMark('load');
+  let me;
+  try{me=await api('me')}
+  catch(e){
+    if(e.code==='no_token')return gate('Сервер ще не налаштований','Адміністратору треба додати токен бота в Supabase → Edge Functions → Secrets.');
+    return gate('Немає зв’язку',esc(e.message))}
+  IS_ADMIN=!!me.me.is_admin;CITIES=me.cities||[];
+  if(!CITIES.length)return gate('Очікуєте доступу',`Вітаю, <b>${esc(me.me.name||'')}</b>! Адміністратор ще не додав вас до жодного міста.<br>Напишіть йому — ви вже є в списку «Доступи».`,`<p class="muted num">ID: ${me.me.tg_id}</p>`);
+  const g=$('gate');if(g)g.remove();
+  let saved=null;try{saved=localStorage.getItem('kv_city')}catch(_){}
+  CITY=CITIES.some(c=>c.id===saved)?saved:CITIES[0].id;
+  try{const c=JSON.parse(localStorage.getItem('kv_srv_'+CITY)||'null');
+    if(c&&c.D){D=norm(c.D);D.records=c.D.records;D.agents=c.D.agents;EXT=c.EXT||{};ROLE=c.ROLE;ME=c.ME;PEOPLE=c.PEOPLE||{};render();applyRole()}}catch(_){}
+  await srvLoad(true);fitAll();
+  setInterval(()=>{if(document.visibilityState==='visible')srvLoad(false)},30000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')srvLoad(false)});
+  window.addEventListener('online',()=>{if(srvDirty)srvSync();else srvLoad(false)});
+}
+function cityDlg(){
+  $('dlg-body').innerHTML=`<h2 id="dlg-title">Місто</h2><div class="morelist">${CITIES.map(c=>
+    `<button onclick="switchCity('${esc(c.id)}')"${c.id===CITY?' class="p"':''}>${esc(c.name)} <span class="muted">· ${{admin:'адміністратор',lead:'керівник',manager:'менеджер'}[c.role]||''}</span></button>`).join('')}</div>`;
+  dlg.showModal();
+}
+async function switchCity(id){
+  if(id===CITY){dlg.close();return}
+  if(srvDirty){clearTimeout(syncT);await srvSync()}
+  CITY=id;BASE=null;try{localStorage.setItem('kv_city',id)}catch(_){}
+  if($('dlg').open)dlg.close();
+  D=clone(DEF);D.quadrants=[];EXT={};render();
+  await srvLoad(true);fitAll();
+}
+/* ── адміністратор: люди, міста, імпорт ── */
+let ADM=null;
+const ROLES={'':'—',manager:'менеджер',lead:'керівник'};
+async function adminDlg(){
+  $('dlg-body').innerHTML='<h2 id="dlg-title">Доступи й міста</h2><p class="muted">Завантажую…</p>';if(!$('dlg').open)dlg.showModal();
+  try{ADM=await api('admin',{op:'users'})}catch(e){$('dlg-body').innerHTML+=`<div class="warn w-red">${esc(e.message)}</div>`;return}
+  renderAdmin();
+}
+function renderAdmin(){
+  const {users,members,cities}=ADM;
+  const roleOf=(tg,c)=>(members.find(m=>m.tg_id===tg&&m.city_id===c)||{}).role||'';
+  const uname=u=>esc(u.name||u.username||String(u.tg_id));
+  $('dlg-body').innerHTML=`<h2 id="dlg-title">Доступи й міста</h2>
+    <p class="muted">Нова людина відкриває бота — і з’являється тут. Оберіть їй місто й роль.</p>
+    ${users.map(u=>`<div class="adm-u"><div><b>${uname(u)}</b>${u.username?` <span class="muted">@${esc(u.username)}</span>`:''}${u.is_admin?' <span class="tag">адмін</span>':''}
+      <div class="muted num" style="font-size:11px">ID ${u.tg_id} · був ${fmt(String(u.last_seen).slice(0,10))}</div></div>
+      ${u.is_admin?'<div class="muted" style="font-size:12px">бачить усі міста</div>':`<div class="adm-roles">${cities.map(c=>`<label>${esc(c.name)}<select onchange="setMember('${esc(c.id)}',${u.tg_id},this.value)">${Object.entries(ROLES).map(([v,t])=>`<option value="${v}"${roleOf(u.tg_id,c.id)===v?' selected':''}>${t}</option>`).join('')}</select></label>`).join('')}</div>`}
+    </div>`).join('')}
+    <details class="qs-more"><summary>Нове місто</summary>
+      <div class="row" style="margin-top:8px"><div><label>Місто</label><select id="nc-pick" onchange="$('nc-other').style.display=this.value==='?'?'':'none'">
+        ${UA_CITIES.filter(c=>!cities.some(x=>x.id===c[1]||x.name===c[0])).map(c=>`<option value="${c[1]}">${c[0]}</option>`).join('')}
+        <option value="?">Інше місто…</option></select></div>
+        <div id="nc-other" style="display:none"><label>Назва міста</label><input id="nc-name" placeholder="Наприклад: Коломия"></div></div>
+      <p class="muted" style="font-size:12px">Координати підставляться самі — карта відкриється на цьому місті.</p>
+      <button class="p" onclick="createCity()">Створити місто</button></details>
+    <details class="qs-more"><summary>Імпорт даних зі старої версії</summary>
+      <p class="muted">JSON з «Експорт усього». Квадрати й контури стануть спільними, історія й агенти — вибраного менеджера.</p>
+      <div class="row" style="margin-top:8px"><div><label>Місто</label><select id="im-city">${cities.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></div>
+        <div><label>Чия історія</label><select id="im-owner">${users.map(u=>`<option value="${u.tg_id}">${uname(u)}</option>`).join('')}</select></div></div>
+      <textarea id="im-json" style="width:100%;height:90px;font:12px var(--mono)" placeholder='вставте JSON або оберіть файл'></textarea>
+      <div class="bar" style="margin-top:8px"><input type="file" id="im-file" accept=".json" onchange="const f=this.files[0];if(f)f.text().then(t=>$('im-json').value=t)">
+        <button class="p" onclick="adminImport()">Імпортувати</button></div></details>
+    <details class="qs-more"><summary>Передати історію іншому менеджеру</summary>
+      <div class="row" style="margin-top:8px"><div><label>Місто</label><select id="tr-city">${cities.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></div>
+        <div><label>Від</label><select id="tr-from">${users.map(u=>`<option value="${u.tg_id}">${uname(u)}</option>`).join('')}</select></div>
+        <div><label>Кому</label><select id="tr-to">${users.map(u=>`<option value="${u.tg_id}">${uname(u)}</option>`).join('')}</select></div></div>
+      <button onclick="transferOwner()">Передати</button></details>`;
+}
+async function setMember(city,tg,role){try{ADM=await api('admin',{op:'set_member',city,tg_id:tg,role});toast('Доступ оновлено')}catch(e){alert(e.message)}}
+const UA_CITIES=[['Київ','kyiv',50.4501,30.5234],['Львів','lviv',49.8397,24.0297],['Одеса','odesa',46.4825,30.7233],['Вінниця','vinnytsia',49.2331,28.4682],
+ ['Харків','kharkiv',49.9935,36.2304],['Дніпро','dnipro',48.4647,35.0462],['Запоріжжя','zaporizhzhia',47.8388,35.1396],['Івано-Франківськ','ivano-frankivsk',48.9226,24.7111],
+ ['Тернопіль','ternopil',49.5535,25.5948],['Хмельницький','khmelnytskyi',49.4229,26.9871],['Житомир','zhytomyr',50.2547,28.6587],['Рівне','rivne',50.6199,26.2516],
+ ['Луцьк','lutsk',50.7472,25.3254],['Ужгород','uzhhorod',48.6208,22.2879],['Чернівці','cv',48.2921,25.9358],['Полтава','poltava',49.5883,34.5514],
+ ['Черкаси','cherkasy',49.4444,32.0598],['Кропивницький','kropyvnytskyi',48.5079,32.2623],['Миколаїв','mykolaiv',46.975,31.9946],['Херсон','kherson',46.6354,32.6169],
+ ['Суми','sumy',50.9077,34.7981],['Чернігів','chernihiv',51.4982,31.2893],['Біла Церква','bila-tserkva',49.7957,30.131],['Кривий Ріг','kryvyi-rih',47.9105,33.3918],
+ ['Кременчук','kremenchuk',49.0659,33.42],['Кам’янець-Подільський','kamianets',48.6845,26.5856],['Мукачево','mukachevo',48.4393,22.7176],['Умань','uman',48.7484,30.2218],
+ ['Бровари','brovary',50.511,30.7909],['Ірпінь','irpin',50.5218,30.2506]];
+const TR={а:'a',б:'b',в:'v',г:'h',ґ:'g',д:'d',е:'e',є:'ie',ж:'zh',з:'z',и:'y',і:'i',ї:'i',й:'i',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'shch',ь:'',ю:'iu',я:'ia'};
+const translit=s=>s.toLowerCase().split('').map(c=>TR[c]??c).join('').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,20)||'city';
+async function createCity(){
+  const pick=$('nc-pick').value;let id,name,center;
+  if(pick==='?'){
+    name=$('nc-name').value.trim();if(!name){alert('Впишіть назву міста');return}
+    id=translit(name);
+    try{const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ua&accept-language=uk&q='+encodeURIComponent(name));
+      const j=await r.json();if(j[0])center=[+j[0].lat,+j[0].lon]}catch(_){}
+    if(!center&&!await ask(`Не знайшов «${name}» на карті. Створити все одно? Карту потім можна буде пересунути вручну.`))return;
+  }else{const c=UA_CITIES.find(x=>x[1]===pick);name=c[0];id=c[1];center=[c[2],c[3]]}
+  if(ADM.cities.some(c=>c.id===id))id=(id+'-'+Date.now().toString(36).slice(-3)).slice(0,20);
+  try{ADM=await api('admin',{op:'create_city',id,name,center});
+    const me=await api('me');CITIES=me.cities;renderAdmin();applyRole();toast('Місто створено')}catch(e){alert(e.message)}
+}
+async function adminImport(){
+  let data;try{data=JSON.parse($('im-json').value)}catch(e){alert('Це не JSON');return}
+  const city=$('im-city').value,owner=Number($('im-owner').value);
+  if(!await ask(`Імпортувати в «${city}»: квадратів ${(data.quadrants||[]).length}, записів ${(data.records||[]).length}, агентів ${(data.agents||[]).length}?`))return;
+  try{const r=await api('admin',{op:'import',city,owner,data:norm(data)});toast(`Імпортовано: ${r.imported.records} записів`);if(city===CITY)srvLoad(true)}catch(e){alert(e.message)}
+}
+async function transferOwner(){
+  const city=$('tr-city').value,from=Number($('tr-from').value),to=Number($('tr-to').value);if(from===to)return;
+  if(!await ask('Передати всю історію й агентів у цьому місті іншому менеджеру?'))return;
+  try{ADM=await api('admin',{op:'transfer',city,from,to});toast('Історію передано');if(city===CITY)srvLoad(true)}catch(e){alert(e.message)}
+}
+
+function moreOpen(){
+  $('dlg-body').innerHTML=`<h2 id="dlg-title">Ще</h2><div class="morelist">
+    <button onclick="goTab('tiles')">▦ Реєстр територій</button>
+    <button onclick="goTab('forecast')">◔ Прогноз</button>
+    <button onclick="reportDlg()">▤ Звіт за місяць</button>
+    ${SRV&&IS_ADMIN?'<button onclick="adminDlg()">👥 Доступи й міста</button>':''}
+    ${SRV&&CITIES.length>1?'<button onclick="cityDlg()">⇄ Інше місто</button>':''}
+    <button onclick="goTab('set')">⚙ Налаштування й дані</button></div>`;
+  dlg.showModal();
+}
+let _tt,_undo=null;
+function toast(t,snap){
+  const e=$('toast');_undo=snap||null;
+  e.innerHTML=`<span>${esc(t)}</span>${snap?'<button onclick="undoLast()">↶ Скасувати</button>':''}`;
+  e.classList.toggle('act',!!snap);e.classList.add('on');clearTimeout(_tt);
+  _tt=setTimeout(()=>{e.classList.remove('on');_undo=null},snap?5500:2600);
+}
+const snapRec=()=>JSON.stringify(D.records);
+function undoLast(){if(!_undo)return;D.records=JSON.parse(_undo);_undo=null;save();hap();toast('Скасовано')}
+if(TG&&TG.showAlert&&TG.isVersionAtLeast&&TG.isVersionAtLeast('6.2')){
+  window.alert=m=>{try{TG.showAlert(String(m).slice(0,4000))}catch(e){toast(String(m).slice(0,160))}};
+}
+function hap(t){try{if(TG&&TG.HapticFeedback&&TG.isVersionAtLeast('6.1')){t==='ok'?TG.HapticFeedback.notificationOccurred('success'):TG.HapticFeedback.impactOccurred('light')}}catch(e){}}
+function ask(msg){
+  if(TG&&TG.showConfirm&&TG.isVersionAtLeast('6.2'))return new Promise(r=>{try{TG.showConfirm(String(msg).slice(0,4000),ok=>r(!!ok))}catch(e){r(confirm(msg))}});
+  return Promise.resolve(confirm(msg));
+}
+function tgBack(){
+  if(!TG||!TG.BackButton||!TG.isVersionAtLeast('6.1'))return;
+  const need=$('dlg').open||document.body.classList.contains('map-full')||!$('v-map').classList.contains('on');
+  need?TG.BackButton.show():TG.BackButton.hide();
+}
+function tgBackPress(){
+  if($('dlg').open)dlg.close();
+  else if(document.body.classList.contains('map-full'))mapFull(false);
+  else goTab('map');
+  hap();setTimeout(tgBack,30);
+}
+new MutationObserver(tgBack).observe($('dlg'),{attributes:true,attributeFilter:['open']});
+const isField=t=>t&&t.matches&&t.matches('input:not([type=checkbox]):not([type=file]),textarea,select');
+document.addEventListener('focusin',e=>{if(isField(e.target))document.body.classList.add('kb')});
+document.addEventListener('focusout',()=>setTimeout(()=>{if(!isField(document.activeElement))document.body.classList.remove('kb')},60));
+let _wasMob=null;window.addEventListener('resize',()=>{const m=isMob();if(m!==_wasMob){_wasMob=m;renderToday()}});
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{syncBnav(t.dataset.v);
+  document.querySelectorAll('.tab').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-selected','false')});t.classList.add('on');t.setAttribute('aria-selected','true');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.getElementById('v-'+t.dataset.v).classList.add('on');
+  if(t.dataset.v==='map')setTimeout(()=>{fitMapM();if(map)map.invalidateSize()},60);
+});
+let _qs;$('q-search').addEventListener('input',()=>{clearTimeout(_qs);_qs=setTimeout(renderJournal,150)});
+document.getElementById('p-agent').addEventListener('change',()=>{planAll=false;plan()});
+document.getElementById('f-s').value=today();
+document.querySelectorAll('label').forEach(l=>{const n=l.nextElementSibling;
+  if(n&&/^(INPUT|SELECT|TEXTAREA)$/.test(n.tagName)&&n.id&&!l.htmlFor)l.htmlFor=n.id});
+syncAllBox();
+
+const LJS=['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+           'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js',
+           'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'];
+function loadL(i){
+  if(typeof L!=='undefined'){initMap();render();return}
+  if(i>=LJS.length){initMap();render();return}
+  const s=document.createElement('script');s.src=LJS[i];
+  s.onload=()=>{initMap();render();setTimeout(fitMapM,100)};s.onerror=()=>loadL(i+1);
+  document.head.appendChild(s);
+}
+_wasMob=isMob();syncBnav('map');render();loadL(0);tgInit();
+</script>
+</body>
+</html>
