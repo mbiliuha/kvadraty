@@ -437,6 +437,10 @@ body.no-perf .pc,body.no-perf .tab[data-v="perf"]{display:none!important}
 body.no-forecast .tab[data-v="forecast"]{display:none!important}
 body.single-mgr .mc{display:none!important}
 /* карта на весь екран */
+.mtool{display:none;align-items:center;gap:6px;flex-wrap:wrap;background:var(--paper);border:1.5px solid var(--ink);padding:6px 8px;margin-bottom:14px!important;font:600 12px var(--mono);box-shadow:0 2px 10px rgba(0,0,0,.18);max-width:calc(100vw - 40px)}
+.mtool:not([style*="none"]){display:flex}
+.mtool button{min-height:38px;padding:0 12px;font-size:13px}.mtool button[disabled]{opacity:.4}
+body.map-full .mtool{margin-bottom:calc(14px + env(safe-area-inset-bottom))!important}
 .fsbtn{width:34px;height:34px;line-height:32px!important;text-align:center;font-size:18px;background:var(--btnbg);color:var(--ink)!important;
   text-decoration:none;cursor:pointer}
 body.map-full{overflow:hidden}
@@ -1111,8 +1115,12 @@ async function toggleLeft(i){
   if(!a.left){
     const b=agentBusy(a.name);
     if(b.length){
-      if(!await ask(`У «${a.name}» є незакриті записи (${b.map(r=>r.q).join(', ')}).\nПозначити «не працює» і закрити ці записи сьогодні?`))return;
-      b.forEach(r=>{if(r.start<=today())r.end=today()});
+      const solo=b.filter(r=>r.agents.length<=1),shared=b.filter(r=>r.agents.length>1);
+      if(!await ask(`У «${a.name}» є незакриті записи (${b.map(r=>qLab(r)).join(', ')}).\nПозначити «не працює»?`+
+        (solo.length?`\n• закриються сьогодні: ${solo.map(r=>qLab(r)).join(', ')}`:'')+
+        (shared.length?`\n• його приберуть зі спільних заходів (решта агентів працює далі): ${shared.map(r=>qLab(r)).join(', ')}`:'')))return;
+      solo.forEach(r=>{if(r.start<=today())r.end=today()});
+      shared.forEach(r=>{r.agents=r.agents.filter(x=>!sameAgent(x,a.name))});
     }
     a.left=true;a.leftDate=today();
   }else{a.left=false;a.leftDate=''}
@@ -1161,6 +1169,10 @@ function initMap(){
     b.innerHTML='⛶';L.DomEvent.on(b,'click',e=>{L.DomEvent.preventDefault(e);L.DomEvent.stopPropagation(e);mapFull()});
     L.DomEvent.disableClickPropagation(b);return b}});
   map.addControl(new FS());
+  const MT=L.Control.extend({options:{position:'bottomleft'},onAdd(){
+    const d=L.DomUtil.create('div','mtool');d.id='mtool';d.style.display='none';
+    L.DomEvent.disableClickPropagation(d);L.DomEvent.disableScrollPropagation(d);return d}});
+  map.addControl(new MT());
 
   setTimeout(()=>map.invalidateSize(),200);
   window.addEventListener('resize',()=>map.invalidateSize());
@@ -1261,7 +1273,7 @@ function workDlg(only){
   const gs=workGroups(og).filter(G=>!only||G.name===only);
   $('dlg-body').innerHTML=`<h2 id="dlg-title">${only?esc(only):'У роботі · '+og.length}</h2>
     ${only?`<button class="xs" onclick="workDlg()" style="margin:4px 0 8px">← усі агенти</button>`:''}
-    ${gs.map(G=>`<details class="wgrp"${only||gs.length===1?' open':''}><summary><b>${esc(G.name)}</b><span class="num">${G.items.length}</span></summary>
+    ${gs.map(G=>`<details class="wgrp"${only||gs.length===1?' open':''}><summary><b>${esc(G.name)}</b>${G.left?' <span class="muted" style="font-size:11px">· не працює</span>':''}<span class="num">${G.items.length}</span></summary>
       ${G.items.sort((a,b)=>a.start.localeCompare(b.start)).map(x=>`<div class="mrow"><b class="mq">${esc(x.label)}</b>
         <div class="mw"><small>${dur(x.start,td)} · з ${fmt(x.start)}</small></div>
         <button class="xs" onclick="closeRec(${x.g.idx}).then(()=>workDlg(${only?js(only):"''"}))">■ Закрити</button></div>`).join('')}</details>`).join('')
@@ -1335,22 +1347,33 @@ async function startDraw(){
 function drawPreview(){
   if(tmpLine){map.removeLayer(tmpLine);tmpLine=null}
   if(tmpPts.length)tmpLine=L.polygon(tmpPts,{color:'#C1401D',weight:2,dashArray:'5,5',fillOpacity:.12}).addTo(map);
-  document.getElementById('draw-n').textContent='ТОЧОК: '+tmpPts.length;
+  document.getElementById('draw-n').textContent='ТОЧОК: '+tmpPts.length;syncTool();
 }
 function undoPt(){tmpPts.pop();drawPreview()}
+/* плаваюча панель на карті під час малювання / редагування меж (працює і на весь екран) */
+function syncTool(){
+  const t=$('mtool');if(!t)return;
+  if(drawing){t.style.display='';t.innerHTML=`<b>${esc(drawing)}</b><span class="num">${tmpPts.length} т.</span>
+    <button onclick="undoPt()"${tmpPts.length?'':' disabled'}>↶ Назад</button><button class="p" onclick="finishDraw()">✓ Готово</button><button onclick="cancelDraw()">✕</button>`}
+  else if(editing){t.style.display='';t.innerHTML=`<b>${esc(editing)}</b>
+    <button onclick="undoEdit()"${editHist.length?'':' disabled'}>↶ Назад</button><button class="p" onclick="finishEdit()">✓ Зберегти</button><button onclick="cancelEdit()">✕</button>`}
+  else{t.style.display='none';t.innerHTML=''}
+}
 function finishDraw(){if(tmpPts.length<3){alert('Треба щонайменше 3 точки');return}
   if(D.quadrants.includes(drawing))D.geo[drawing]=tmpPts;cancelDraw();save()}
 function cancelDraw(){drawing=null;tmpPts=[];if(map){if(tmpLine){map.removeLayer(tmpLine);tmpLine=null}map.doubleClickZoom.enable()}
-  document.getElementById('drawbox').classList.remove('on')}
+  document.getElementById('drawbox').classList.remove('on');syncTool()}
 
 /* ── редагування меж ──────────────────────── */
-let editing=null,editPts=null,editPoly=null,handles=[];
+let editing=null,editPts=null,editPoly=null,handles=[],editHist=[];
+const pushEdit=()=>{editHist.push(editPts.map(p=>[p[0],p[1]]));if(editHist.length>50)editHist.shift()};
+function undoEdit(){if(!editHist.length)return;editPts=editHist.pop();drawEdit()}
 function startEdit(q){
   q=q||pickQ(true);if(!q)return;
   if(!D.geo[q]){alert(`У «${q}» немає контуру.`);return}
   if(!map){alert('Карта не завантажена (потрібен інтернет).');return}
   if(drawing){alert('Спершу завершіть або скасуйте малювання.');return}
-  map.doubleClickZoom.disable();editing=q;editPts=D.geo[q].map(p=>[p[0],p[1]]);
+  map.doubleClickZoom.disable();editing=q;editPts=D.geo[q].map(p=>[p[0],p[1]]);editHist=[];
   document.getElementById('editbox').classList.add('on');
   document.getElementById('edit-title').textContent='Межі '+q;
   map.fitBounds(L.latLngBounds(editPts).pad(.15));drawMap();drawEdit();
@@ -1362,24 +1385,26 @@ function drawEdit(){
   editPoly=L.polygon(editPts,{color:'#C1401D',weight:2.5,dashArray:'6,4',fillOpacity:.14}).addTo(map);
   editPts.forEach((p,i)=>{
     const h=L.marker(p,{draggable:true,icon:L.divIcon({className:'',html:'<div class="vh"></div>',iconSize:[13,13],iconAnchor:[6,6]})}).addTo(map);
+    h.on('dragstart',pushEdit);
     h.on('drag',e=>{editPts[i]=[e.latlng.lat,e.latlng.lng];editPoly.setLatLngs(editPts)});
     h.on('dragend',drawEdit);
     h.on('dblclick',e=>{L.DomEvent.stop(e);
       if(editPts.length<=3){alert('Мінімум 3 точки');return}
-      editPts.splice(i,1);drawEdit()});
+      pushEdit();editPts.splice(i,1);drawEdit()});
     h.on('click',e=>{if(e.originalEvent.altKey){
       if(editPts.length<=3){alert('Мінімум 3 точки');return}
-      editPts.splice(i,1);drawEdit()}});
+      pushEdit();editPts.splice(i,1);drawEdit()}});
     handles.push(h);
     const nx=editPts[(i+1)%editPts.length],mid=[(p[0]+nx[0])/2,(p[1]+nx[1])/2];
     const m=L.marker(mid,{icon:L.divIcon({className:'',html:'<div class="vm"></div>',iconSize:[11,11],iconAnchor:[5,5]})}).addTo(map);
-    m.on('click',()=>{editPts.splice(i+1,0,mid);drawEdit()});
+    m.on('click',()=>{pushEdit();editPts.splice(i+1,0,mid);drawEdit()});
     handles.push(m);
   });
+  syncTool();
 }
 function finishEdit(){if(editing&&D.quadrants.includes(editing))D.geo[editing]=editPts;cancelEdit();save()}
-function cancelEdit(){if(map){clearHandles();map.doubleClickZoom.enable()}editing=null;editPts=null;
-  document.getElementById('editbox').classList.remove('on');drawMap()}
+function cancelEdit(){if(map){clearHandles();map.doubleClickZoom.enable()}editing=null;editPts=null;editHist=[];
+  document.getElementById('editbox').classList.remove('on');drawMap();syncTool()}
 
 /* ── структура: додати / перейменувати / видалити ── */
 function migrate(o,n){
@@ -1440,9 +1465,8 @@ function addSub(p){
   let i=1;while(used.includes(i))i++;
   const n=p+'.'+i;
   D.quadrants.push(n);
-  const own=D.records.filter(r=>r.q===p).length;
   save();$('m-draw-q').value=n;
-  alert(`Створено «${n}».`+(own?`\n\nУвага: у квадрата ${p} є ${own} власних записів історії. Вони не враховуються у статусах підквадратів. Перенесіть їх (Історія → ✎) на потрібні підквадрати.`:'')
+  alert(`Створено «${n}».`
     +`\n\nТепер натисніть «Обвести», щоб задати його межі.`);
 }
 async function delQ(q){
@@ -1942,8 +1966,9 @@ async function closeRec(idx){
   const par=parentOf(r.q);
   if(par&&!kids.length){
     const job=D.records.find(x=>!x.end&&(x.q===par||(x.extraQs||[]).includes(par)));
-    const stillOpen=D.records.filter(x=>!x.end&&parentOf(x.q)===par);
-    if(job&&!stillOpen.length){
+    // питаємо, лише коли кожен підквадрат має власний закритий запис у межах цього заходу
+    const allDone=job&&kidsOf(par).every(k=>D.records.some(x=>x.q===k&&x.end&&x.start>=job.start));
+    if(job&&allDone){
       const other=[job.q,...(job.extraQs||[])].filter(z=>z!==par);
       const otherOpen=D.records.filter(x=>!x.end&&other.includes(parentOf(x.q)));
       save();
