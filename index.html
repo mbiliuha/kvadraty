@@ -31,7 +31,7 @@ html.dark .stamp{background:transparent}
   --ink:#1B2028; --ink2:#4A5260; --ink3:#6B675C;
   --rule:#C9BFA8;
   --acc:#C1401D;              /* вермільйон — тривога / активність */
-  --busy:#24527A; --free:#2E6B43; --soon:#7E5C0A; --block:#B03818; --none:#6B675C;
+  --busy:#2F6DB0; --free:#2E8B57; --soon:#C98A12; --block:#C9502F; --none:#8C8578;
   --disp:'Unbounded',Georgia,serif;
   --body:'Commissioner',-apple-system,Segoe UI,sans-serif;
   --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
@@ -171,8 +171,11 @@ td.num,.num{font-family:var(--mono);font-size:12.5px}
 .qlab{display:inline-block;background:var(--lab);color:var(--ink);font:700 11px/1 var(--mono);letter-spacing:-.02em;
   padding:3px 5px 3px 4px;border-left:3px solid;box-shadow:0 1px 2px rgba(27,32,40,.25);white-space:nowrap;cursor:pointer;
   transform:translate(-50%,-50%);position:absolute;left:0;top:0}
-.qlab.grp{background:var(--ink);color:var(--paper);border-left-color:var(--paper)!important;font-size:12px;padding:4px 7px}
-.qlab.grp small{font-weight:500;opacity:.7;margin-left:3px;font-size:9px}
+.qlab.grp{font-size:12px;padding:4px 7px 4px 6px;border-left-width:4px}
+.qlab.grp small{font-weight:600;color:var(--ink2);background:var(--paper2);margin-left:5px;padding:1px 4px;font-size:9px}
+/* підложка карти — приглушена, у тон паперу, щоб кольори статусів читались */
+.leaflet-tile-pane{filter:saturate(.4) contrast(.94) brightness(1.04) sepia(.14)}
+body.sat .leaflet-tile-pane{filter:saturate(.75) brightness(.95)}
 .qlab-wrap{width:0!important;height:0!important;background:none;border:none}
 #drawbox,#editbox{display:none;padding:11px 14px;background:var(--card);border:1.2px solid var(--acc);
   border-left-width:5px;margin-bottom:14px}
@@ -981,13 +984,16 @@ function dur(a,b){
   return plural(y,YEAR)+(r?' '+plural(r,MON):'');
 }
 const STY={
-  free:{weight:2.2,fillOpacity:.42,opacity:1},busy:{weight:2.4,fillOpacity:.45,opacity:1},
-  soon:{weight:1.8,fillOpacity:.3,opacity:.95},
-  block:{weight:1,fillOpacity:.07,opacity:.55,dashArray:'3,4'},none:{weight:1,fillOpacity:.06,opacity:.5,dashArray:'2,4'}};
+  free:{weight:2,fillOpacity:.32,opacity:.95},busy:{weight:2,fillOpacity:.36,opacity:.95},
+  soon:{weight:2,fillOpacity:.26,opacity:.9},
+  block:{weight:1.2,fillOpacity:.08,opacity:.6,dashArray:'4,4'},none:{weight:1.2,fillOpacity:.05,opacity:.5,dashArray:'4,4'}};
 const mapHide=new Set();
 function toggleLeg(s){mapHide.has(s)?mapHide.delete(s):mapHide.add(s);
   document.querySelectorAll('.legend [data-s]').forEach(x=>x.classList.toggle('off',mapHide.has(x.dataset.s)));drawMap();hap()}
-const COL={free:'#2E6B43',soon:'#8C6510',busy:'#24527A',block:'#B03818',none:'#8A8578'};
+const COL_LIGHT={free:'#2E8B57',soon:'#C98A12',busy:'#2F6DB0',block:'#C9502F',none:'#8C8578'};
+const COL_OLD={free:'#2E6B43',soon:'#8C6510',busy:'#24527A',block:'#B03818',none:'#8A8578'};
+const COL_DARK={free:'#5FB07D',soon:'#D2A23A',busy:'#6FA3D6',block:'#E06A47',none:'#9A968C'};
+const COL=new Proxy({},{get:(_,k)=>(document.documentElement.classList.contains('dark')?COL_DARK:COL_LIGHT)[k]});
 
 /* ── ієрархія ─────────────────────────────── */
 const parentOf=q=>q.includes('.')?q.split('.')[0]:null;
@@ -1115,7 +1121,7 @@ const TILES=[
 let overlays=[];
 function msg(h,c){document.getElementById('mapmsg').innerHTML=h?`<div class="warn ${c||'w-yel'}">${h}</div>`:''}
 function setTiles(i){
-  i=+i||0;tileErr=0;D.tile=i;persistView();document.getElementById('tilesrc').value=i;
+  i=+i||0;tileErr=0;D.tile=i;document.body.classList.toggle('sat',i>=3);persistView();document.getElementById('tilesrc').value=i;
   if(tiles)map.removeLayer(tiles);overlays.forEach(o=>map.removeLayer(o));overlays=[];
   const t=TILES[i];
   tiles=L.tileLayer(t.u,{maxZoom:t.m,maxNativeZoom:t.n||t.m,attribution:t.a,crossOrigin:true}).addTo(map);
@@ -1155,7 +1161,7 @@ function drawMap(){
     const leaf=isLeaf(q)||MAPWHOLE;
     const i=isLeaf(q)?qInfo(q):groupInfo(q),c=COL[i.cls];
     if(!leaf){ // батько з дітьми — лише контур
-      L.polygon(pts,{color:'#1B2028',weight:2,fill:false,dashArray:'7,5',opacity:.75,interactive:false}).addTo(layer);
+      L.polygon(pts,{color:document.documentElement.classList.contains('dark')?'#ECE6D9':'#1B2028',weight:1.6,fill:false,opacity:.45,interactive:false}).addTo(layer);
       return;
     }
     if(mapHide.has(i.cls))return;
@@ -1192,7 +1198,7 @@ function placeLabels(){
     if(placed.some(o=>r.x1<o.x2&&r.x2>o.x1&&r.y1<o.y2&&r.y2>o.y1))return;
     placed.push(r);
     L.marker(it.ll,{icon:L.divIcon({className:'qlab-wrap',iconSize:[0,0],
-      html:it.grp?`<div class="qlab grp">${esc(it.t)}<small>·${it.grp}</small></div>`:`<div class="qlab" style="border-left-color:${it.c}">${esc(it.t)}</div>`}),keyboard:false})
+      html:it.grp?`<div class="qlab grp" style="border-left-color:${COL[groupInfo(it.q).cls]}">${esc(it.t)}<small>${it.grp}</small></div>`:`<div class="qlab" style="border-left-color:${it.c}">${esc(it.t)}</div>`}),keyboard:false})
       .addTo(labLayer).on('click',()=>{if(drawing||editing)return;
         if(it.grp){const g=D.geo[it.q];map.fitBounds(L.latLngBounds(g||labCand.filter(x=>x.par===it.q).flatMap(x=>x.pts)).pad(.1))}
         else openQ(it.q)});
