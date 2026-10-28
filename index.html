@@ -70,6 +70,10 @@ nav{display:flex;gap:2px;margin-top:12px;flex-wrap:wrap}
 }
 .tab:hover{color:var(--ink);background:var(--paper2)}
 .tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.navx-sp{flex:1}
+.navx{font:600 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;padding:9px 14px;margin:0 0 4px 6px;cursor:pointer;color:var(--ink);background:transparent;border:1.2px solid var(--ink)}
+.navx:hover{background:var(--paper2)}
+.adm-only{display:none}body.is-admin .adm-only{display:inline-block}
 main{padding:26px;max-width:1580px;margin:0 auto}
 .view{display:none;animation:rise .35s ease both}
 .view.on{display:block}
@@ -471,6 +475,9 @@ body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size
     <button class="tab" data-v="hist" role="tab" aria-selected="false">Історія</button>
     <button class="tab" data-v="agents" role="tab" aria-selected="false">Агенти</button>
     <button class="tab" data-v="set" role="tab" aria-selected="false">Налаштування</button>
+    <span class="navx-sp"></span>
+    <button class="navx" onclick="reportDlg()">Звіт</button>
+    <button class="navx adm-only" onclick="adminDlg()">👥 Доступи й міста</button>
   </nav>
 </header>
 
@@ -2410,7 +2417,7 @@ async function srvInit(){
   catch(e){
     if(e.code==='no_token')return gate('Сервер ще не налаштований','Адміністратору треба додати токен бота в Supabase → Edge Functions → Secrets.');
     return gate('Немає зв’язку',esc(e.message))}
-  IS_ADMIN=!!me.me.is_admin;CITIES=me.cities||[];
+  IS_ADMIN=!!me.me.is_admin;CITIES=me.cities||[];document.body.classList.toggle('is-admin',IS_ADMIN);
   if(!CITIES.length)return gate('Очікуєте доступу',`Вітаю, <b>${esc(me.me.name||'')}</b>! Адміністратор ще не додав вас до жодного міста.<br>Напишіть йому — ви вже є в списку «Доступи».`,`<p class="muted num">ID: ${me.me.tg_id}</p>`);
   const g=$('gate');if(g)g.remove();
   let saved=null;try{saved=localStorage.getItem('kv_city')}catch(_){}
