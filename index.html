@@ -237,6 +237,9 @@ body.in-tg main{padding-bottom:calc(26px + env(safe-area-inset-bottom))}
 button.big{width:100%;min-height:48px;font-size:12px}
 .chip.bad{border-color:var(--rule);color:var(--ink3)}
 .chip .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.gbar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin:2px 0 8px}.gbar i{display:block;min-width:3px}
+.gleg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--ink2)}.gleg .dot{margin-right:5px}
+.jqf{display:inline-flex;align-items:center;gap:6px;margin:0 0 8px}
 .qs-more{border-top:1px solid var(--rule);padding:10px 0 2px}
 .qs-more summary{font:600 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);cursor:pointer;padding:4px 0}
 .hrow{display:grid;grid-template-columns:44px 1fr;gap:2px 10px;padding:8px 0;border-bottom:1px solid var(--rule);font-size:13px}
@@ -1689,15 +1692,20 @@ const mgrColor=n=>(MANAGERS.find(m=>m.name===n)||{}).color||'var(--ink2)';
 const mgrTag=r=>r.mgr?`<span class="mgr" style="color:${esc(mgrColor(r.mgr))}">${esc(r.mgr)}</span>`:'';
 function jSubPref(){try{const v=localStorage.getItem('kv_jsub_'+(CITY||''));return v==null?true:v==='1'}catch(_){return true}}
 function setJSub(v){try{localStorage.setItem('kv_jsub_'+(CITY||''),v?'1':'0')}catch(_){}renderJournal()}
+let JQ=null;
+const inQ=(r,q)=>[r.q,...(r.extraQs||[])].some(x=>x===q||x.startsWith(q+'.')||(parentOf(q)&&x===parentOf(q)));
+function histOf(q){goTab('hist');JQ=q;$('q-search').value='';renderJournal()}
+function clearJQ(){JQ=null;renderJournal()}
 function renderJournal(){
-  const s=($('q-search').value||'').toLowerCase().trim(),subOn=jSubPref();
+  const s=($('q-search').value||'').toLowerCase().trim(),subOn=jSubPref()||!!JQ;
   if($('j-sub'))$('j-sub').checked=subOn;
   let hidden=0;
   const rows=D.records.map((r,idx)=>({r,idx}))
+    .filter(({r})=>!JQ||inQ(r,JQ))
     .filter(({r})=>{if(!subOn&&!s&&r.q.includes('.')&&!hasMet(r)){hidden++;return false}return true})
     .filter(({r})=>!s||[qLab(r),r.src,fmt(r.start),fmt(r.end),r.start,r.end,r.agents.join(' '),r.note,r.mgr].join(' ').toLowerCase().includes(s))
     .sort((a,b)=>b.r.start.localeCompare(a.r.start));
-  if($('j-hidden'))$('j-hidden').textContent=hidden?`Приховано ${hidden} записів по підквадратах — увімкніть «підквадрати», щоб побачити.`:'';
+  if($('j-hidden'))$('j-hidden').innerHTML=JQ?`<span class="jqf">Квадрат <b>${esc(JQ)}</b> · ${rows.length} <button class="xs" onclick="clearJQ()">✕ усі</button></span>`:hidden?`Приховано ${hidden} записів по підквадратах — увімкніть «підквадрати», щоб побачити.`:'';
   $('tbl').innerHTML=
     `<tr><th>Кв.</th><th>Початок</th><th>Кінець</th><th>Трив.</th><th>Агенти</th><th class="mc">Менеджер</th><th class="pc">Дог.</th><th class="pc">Укладено</th><th class="pc">Оплата</th><th>Примітка</th><th></th></tr>`+
     rows.map(({r,idx})=>`<tr><td class="num"><b>${esc(qLab(r))}</b>${r.grp?`<br><span class="tag" title="запис створено як «весь квадрат ${esc(r.src)}»">◱ весь ${esc(r.src)}</span>`:''}</td><td class="num">${fmt(r.start)}</td>
@@ -1709,7 +1717,7 @@ function renderJournal(){
       <td class="muted">${esc(r.note||'')}</td>
       <td style="white-space:nowrap"><button class="xs" onclick="editRec(${idx})">✎</button>
       <button class="d" onclick="del(${idx})">×</button></td></tr>`).join('');
-  const lim=jAll||s?1e9:40;
+  const lim=jAll||s||JQ?1e9:40;
   $('jlist').innerHTML=rows.slice(0,lim).map(({r,idx})=>`<div class="jrow">
       <b class="jq">${esc(qLab(r))}</b>
       <div class="jm"><div class="jd">${fmtS(r.start)} – ${r.end?fmtS(r.end):'<span class="t-busy">в роботі</span>'}${r.end?` · ${dur(r.start,r.end)}`:''}${r.part?' · ½':''}${r.grp?` · <span class="muted">весь ${esc(r.src)}</span>`:''}</div>
@@ -1738,12 +1746,13 @@ function openQ(q){
   const metR=recs.filter(hasMet).slice().reverse();      // хронологічно для динаміки
   const delta=r=>{const k=metR.indexOf(r);if(k<1||!r.signed)return'';const p=metR[k-1];if(!p.signed)return'';
     const v=Math.round((r.signed-p.signed)/p.signed*100);return ` <span class="${v>=0?'t-free':'t-block'}">${v>=0?'+':''}${v}%</span>`};
-  const hist=recs.map(r=>`<div class="hrow"><b class="num">${esc(!leaf&&r.grp?r.src+' весь':qLab(r))}</b>
-      <span class="num">${fmtS(r.start)} – ${r.end?fmtS(r.end):'зараз'}${r.end?' · '+dur(r.start,r.end):''}</span>
-      <span>${esc(r.agents.join(', '))}${r.mgr?' · '+mgrTag(r):''}</span>
-      ${hasMet(r)?`<span class="num">дог. ${r.contracts??0} · ${money(r.signed)||'0 ₴'}${delta(r)}${r.paid?` · опл. ${money(r.paid)}`:''}</span>`:''}
-      ${r.note?`<span class="muted">${esc(r.note)}</span>`:''}</div>`).join('')
-    ||'<p class="muted">Записів немає.</p>';
+  const HN=3,bun=[];      // однакові виїзди по кількох підквадратах — одним рядком
+  recs.forEach(r=>{const k=r.start+'|'+(r.end||'')+'|'+r.agents.join(',');const b=bun.find(x=>x.k===k&&!r.grp&&!x.r.grp);if(b)b.n++;else bun.push({k,r,n:1})});
+  const shown=bun.slice(0,HN);
+  const hist=shown.map(({r,n})=>`<div class="hrow"><b class="num">${esc(!leaf&&r.grp?r.src+' весь':qLab(r))}${n>1?`<small> +${n-1}</small>`:''}</b>
+      <span class="num">${fmtS(r.start)} – ${r.end?fmtS(r.end):'зараз'}${r.end?' · '+dur(r.start,r.end):''} · ${esc(r.agents.join(', ')||'—')}</span>
+      ${hasMet(r)&&FEAT.perf?`<span class="num">дог. ${r.contracts??0} · ${money(r.signed)||'0 ₴'}${delta(r)}</span>`:''}</div>`).join('')
+    ||'<p class="muted" style="margin:6px 0">Записів немає.</p>';
   let act='';
   if(leaf&&i.foreign){
     act=`<div class="warn w-yel">Зараз працює команда <b>${esc(i.foreign)}</b>. Видати цей квадрат не можна.</div>`;
@@ -1756,8 +1765,14 @@ function openQ(q){
       ||'<span class="muted">Немає агентів, які працюють.</span>'}</div>
       ${ags.some(e=>!e.r.ok)?'<div class="muted" style="font-size:11.5px;margin-top:6px">✕ — уже працював тут</div>':''}`;
   }else{
-    act=`<div class="qs-lbl">Частини (${i.total}, вільних ${i.ready}):</div><div class="chips">${kidsOf(q).map(k=>{const ki=qInfo(k);
-      return `<button class="chip" onclick="openQ(${js(k)})"><span class="dot" style="background:${COL[ki.cls]}"></span>${esc(k)}</button>`}).join('')}</div>`;
+    const LBL={busy:'в роботі',free:'готові',none:'без записів',soon:'умовно',block:'зарано'},ORD=['busy','free','none','soon','block'];
+    const cnt={};i.kids.forEach(k=>cnt[k.cls]=(cnt[k.cls]||0)+1);
+    const nxt=i.kids.filter(k=>k.cls==='soon'||k.cls==='block').map(k=>addM(k.last.end,D.settings.min)).sort()[0];
+    act=`<div class="qs-lbl">${i.total} підквадратів</div>
+      <div class="gbar">${ORD.filter(c=>cnt[c]).map(c=>`<i style="flex:${cnt[c]};background:${COL[c]}"></i>`).join('')}</div>
+      <div class="gleg">${ORD.filter(c=>cnt[c]).map(c=>`<span><span class="dot" style="background:${COL[c]}"></span>${LBL[c]} <b class="num">${cnt[c]}</b></span>`).join('')}</div>
+      ${!i.ready&&nxt?`<div class="muted" style="font-size:12px;margin-top:6px">Найближчий звільниться ≈ ${fmt(nxt)}</div>`:''}
+      <div class="muted" style="font-size:11.5px;margin-top:6px">Натисніть підквадрат на карті, щоб видати його.</div>`;
   }
   $('dlg-body').innerHTML=`
     <div class="qs-head"><h2 id="dlg-title">Квадрат ${esc(q)}</h2><span class="stamp s-${i.cls}">${esc(i.txt)}</span></div>
@@ -1765,7 +1780,8 @@ function openQ(q){
     <div class="qs-sub muted">${leaf&&i.active?`в роботі з ${fmt(i.active.start)} · ${dur(i.active.start,today())}`:leaf&&i.last?`відпочиває ${dur(i.last.end,today())} · востаннє ${fmt(i.last.end)}`:leaf?'записів ще немає':''}</div>
     <div class="qs-act">${act}</div>
     ${D.plan&&D.plan[q]?`<div class="muted" style="font-size:12px;margin:-4px 0 10px">Закріплений за: ${mgrTag({mgr:D.plan[q]})}</div>`:''}
-    <details class="qs-more"${metR.length?' open':''}><summary>Історія · ${recs.length}${metR.length?` · заходів з показниками ${metR.length}`:''}</summary>${hist}</details>
+    <div class="qs-more"><div class="qs-lbl" style="margin:4px 0 2px">Останні заходи</div>${hist}
+      ${bun.length>HN||recs.length>shown.length?`<button class="xs" style="margin:8px 0 2px" onclick="histOf(${js(q)})">Уся історія квадрата · ${recs.length} ›</button>`:''}</div>
     <details class="qs-more"><summary>Керування</summary><div class="bar" style="margin:8px 0 0">
       ${!parentOf(q)?`<button class="xs" onclick="dlg.close();addSub(${js(q)})">+ підквадрат</button>`:''}
       ${D.geo[q]?`<button class="xs" onclick="dlg.close();startEdit(${js(q)})">✎ межі</button>`:''}
@@ -2192,7 +2208,7 @@ function saveSet(){
 /* ── запуск ───────────────────────────────── */
 document.querySelectorAll('.panel.fold>h2').forEach(h=>h.addEventListener('click',()=>{if(isMob())h.parentNode.classList.toggle('open')}));
 const isMob=()=>!!(window.matchMedia&&window.matchMedia('(max-width:700px)').matches);
-function goTab(v){hap();const t=document.querySelector(`.tab[data-v="${v}"]`);if(t)t.click();if($('dlg').open)dlg.close();window.scrollTo(0,0)}
+function goTab(v){hap();JQ=null;const t=document.querySelector(`.tab[data-v="${v}"]`);if(t)t.click();if($('dlg').open)dlg.close();window.scrollTo(0,0)}
 function syncBnav(v){setTimeout(tgBack,0);document.querySelectorAll('#bnav button').forEach(b=>b.classList.toggle('on',b.dataset.b===v||(b.dataset.b==='more'&&['tiles','forecast','set','perf'].includes(v))))}
 /* ── тема ── */
 function themeMode(){try{return localStorage.getItem('kv_theme')||'auto'}catch(_){return 'auto'}}
