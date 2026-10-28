@@ -1179,7 +1179,7 @@ function initMap(){
   layer=L.layerGroup().addTo(map);labLayer=L.layerGroup().addTo(map);
   map.on('zoomend',placeLabels);
   map.on('moveend',()=>{D.view={c:[map.getCenter().lat,map.getCenter().lng],z:map.getZoom()};persistView()});
-  map.on('click',e=>{if(!drawing)return;tmpPts.push([e.latlng.lat,e.latlng.lng]);drawPreview()});
+  map.on('click',e=>{if(!drawing)return;const tg=e.originalEvent&&e.originalEvent.target;if(tg&&(!document.contains(tg)||tg.closest('.leaflet-control')))return;tmpPts.push([e.latlng.lat,e.latlng.lng]);drawPreview()});
   drawMap();
 }
 const centroid=p=>{let x=0,y=0;p.forEach(c=>{x+=c[0];y+=c[1]});return[x/p.length,y/p.length]};
@@ -1353,11 +1353,18 @@ function undoPt(){tmpPts.pop();drawPreview()}
 /* плаваюча панель на карті під час малювання / редагування меж (працює і на весь екран) */
 function syncTool(){
   const t=$('mtool');if(!t)return;
-  if(drawing){t.style.display='';t.innerHTML=`<b>${esc(drawing)}</b><span class="num">${tmpPts.length} т.</span>
-    <button onclick="undoPt()"${tmpPts.length?'':' disabled'}>↶ Назад</button><button class="p" onclick="finishDraw()">✓ Готово</button><button onclick="cancelDraw()">✕</button>`}
-  else if(editing){t.style.display='';t.innerHTML=`<b>${esc(editing)}</b>
-    <button onclick="undoEdit()"${editHist.length?'':' disabled'}>↶ Назад</button><button class="p" onclick="finishEdit()">✓ Зберегти</button><button onclick="cancelEdit()">✕</button>`}
-  else{t.style.display='none';t.innerHTML=''}
+  const mode=drawing?'d:'+drawing:editing?'e:'+editing:'';
+  if(!mode){t.style.display='none';t.innerHTML='';t.dataset.mode='';return}
+  // кнопки створюємо один раз на режим і далі лише оновлюємо — інакше тап по кнопці, яку щойно перемальовано, «провалюється» на карту як нова точка
+  if(t.dataset.mode!==mode){
+    t.dataset.mode=mode;t.style.display='';
+    t.innerHTML=drawing?`<b>${esc(drawing)}</b><span class="num" id="mt-n"></span>
+      <button id="mt-undo" onclick="undoPt()">↶ Назад</button><button class="p" onclick="finishDraw()">✓ Готово</button><button onclick="cancelDraw()">✕</button>`
+      :`<b>${esc(editing)}</b><button id="mt-undo" onclick="undoEdit()">↶ Назад</button><button class="p" onclick="finishEdit()">✓ Зберегти</button><button onclick="cancelEdit()">✕</button>`;
+    t.querySelectorAll('button').forEach(b=>L.DomEvent.on(b,'click touchstart touchend mousedown pointerdown',L.DomEvent.stopPropagation));
+  }
+  const n=$('mt-n');if(n)n.textContent=tmpPts.length+' т.';
+  const u=$('mt-undo');if(u)u.disabled=drawing?!tmpPts.length:!editHist.length;
 }
 function finishDraw(){if(tmpPts.length<3){alert('Треба щонайменше 3 точки');return}
   if(D.quadrants.includes(drawing))D.geo[drawing]=tmpPts;cancelDraw();save()}
