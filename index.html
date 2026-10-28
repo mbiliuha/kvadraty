@@ -424,6 +424,11 @@ body.srv [data-nosrv]{display:none!important}
 #mw-btn.on{background:var(--ink);color:var(--paper)}
 body.srv-manager .fullonly{display:none!important}
 @media (max-width:700px){.row.r3m{grid-template-columns:1fr 1fr 1fr}#v-perf .stats{grid-template-columns:repeat(2,1fr)!important}}
+.aswatch{width:22px;height:22px;min-height:0!important;padding:0!important;border-radius:50%;border:2px solid var(--card);box-shadow:0 0 0 1.2px var(--ink3);flex:0 0 auto;cursor:pointer}
+.swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:12px}
+.sw{aspect-ratio:1;min-height:0!important;padding:0!important;border-radius:50%;border:3px solid var(--card);box-shadow:0 0 0 1.2px var(--rule)}
+.sw.on{box-shadow:0 0 0 3px var(--ink)}
+#cm-btn.on{background:var(--ink);color:var(--paper)}
 /* карта на весь екран */
 .fsbtn{width:34px;height:34px;line-height:32px!important;text-align:center;font-size:18px;background:var(--btnbg);color:var(--ink)!important;
   text-decoration:none;cursor:pointer}
@@ -484,6 +489,7 @@ body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size
       <option value="3">Карта: супутник+вулиці</option>
       <option value="4">Карта: супутник</option>
     </select>
+    <button id="cm-btn" onclick="toggleColorMode()" title="Розфарбувати квадрати за агентами">🎨 Агенти</button>
     <button id="mw-btn" onclick="toggleWhole()" title="Показувати великі квадрати цілком або по підквадратах">◱ Цілком</button>
     <button class="only-m" id="ed-toggle" onclick="document.body.classList.toggle('m-edit');this.classList.toggle('on')">✎ Межі</button>
     <span class="muted num edtool" id="geo-count" style="margin-left:auto"></span>
@@ -502,7 +508,8 @@ body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size
     <button class="p" onclick="finishEdit()">Зберегти</button>
     <button onclick="cancelEdit()">Скасувати</button>
   </div>
-  <div class="legend" title="Натисніть, щоб сховати / показати">
+  <div class="legend" id="ag-legend" style="display:none"></div>
+  <div class="legend" id="st-legend" title="Натисніть, щоб сховати / показати">
     <span data-s="busy" onclick="toggleLeg('busy')"><i style="background:var(--busy)"></i>В роботі</span>
     <span data-s="free" onclick="toggleLeg('free')"><i style="background:var(--free)"></i>Готовий</span>
     <span data-s="soon" onclick="toggleLeg('soon')"><i style="background:var(--soon)"></i>Умовно</span>
@@ -1157,7 +1164,7 @@ function initMap(){
 }
 const centroid=p=>{let x=0,y=0;p.forEach(c=>{x+=c[0];y+=c[1]});return[x/p.length,y/p.length]};
 function drawMap(){
-  if(!layer)return;layer.clearLayers();labCand=[];let n=0;
+  if(!layer)return;layer.clearLayers();labCand=[];AGSEEN=new Set();let n=0;
   D.quadrants.forEach(q=>{
     const pts=D.geo[q];if(!pts||pts.length<3)return;n++;
     if(q===editing)return;
@@ -1169,17 +1176,42 @@ function drawMap(){
       return;
     }
     if(mapHide.has(i.cls))return;
-    const st=STY[i.cls]||STY.none,base={color:c,fillColor:c,...st};
+    let st=STY[i.cls]||STY.none,base={color:c,fillColor:c,...st};
+    if(COLORMODE){
+      const r=i.active||(isLeaf(q)?i.inJob:null)||(i.last&&!i.last.ext?i.last:null);
+      const ag=r&&r.agents&&r.agents[0];
+      if(ag){const ac=agentColor(ag),on=!r.end;
+        st={weight:on?2.6:1.4,fillOpacity:on?.5:.3,opacity:1,dashArray:on?null:'4,3'};base={color:ac,fillColor:ac,...st};
+        AGSEEN.add(canonName(ag));}
+      else{st=STY.none;base={color:COL.none,fillColor:COL.none,...st}}
+    }
     const poly=L.polygon(pts,base).addTo(layer);
     poly.on('click',ev=>{if(drawing||editing)return;L.DomEvent.stop(ev);openQ(q)});
     poly.on('mouseover',()=>poly.setStyle({weight:3,fillOpacity:Math.max(st.fillOpacity+.15,.3),opacity:1}));
     poly.on('mouseout',()=>poly.setStyle(base));
-    labCand.push({q,pts,c,par:MAPWHOLE?null:parentOf(q)});
+    labCand.push({q,pts,c:base.color,par:MAPWHOLE?null:parentOf(q)});
   });
-  placeLabels();
+  placeLabels();renderAgLegend();
   document.getElementById('geo-count').textContent=`КОНТУРІВ ${n} / ${D.quadrants.length}`;
 }
 /* підписи без накладань: показуємо лише ті, що влазять; дрібні підквадрати при віддаленні ховаються в номер великого */
+/* ── кольори агентів ── */
+const AG_PAL=['#2F6DB0','#C9502F','#2E8B57','#8E44AD','#D4A017','#0E8C8C','#C2185B','#5D6D7E','#E67E22','#3949AB','#7CB342','#6D4C41'];
+let COLORMODE=false,AGSEEN=new Set();
+function agentColor(n){const a=findAgent(n);if(a&&a.color)return a.color;
+  let h=0;const s=normName(n);for(let k=0;k<s.length;k++)h=(h*31+s.charCodeAt(k))>>>0;return AG_PAL[h%AG_PAL.length]}
+function toggleColorMode(){COLORMODE=!COLORMODE;const b=$('cm-btn');if(b){b.textContent=COLORMODE?'● Статуси':'🎨 Агенти';b.classList.toggle('on',COLORMODE)}
+  $('st-legend').style.display=COLORMODE?'none':'';$('ag-legend').style.display=COLORMODE?'':'none';drawMap();hap()}
+function renderAgLegend(){const el=$('ag-legend');if(!el)return;
+  el.innerHTML=COLORMODE?([...AGSEEN].sort((a,b)=>a.localeCompare(b,'uk')).map(n=>`<span><i style="background:${agentColor(n)}"></i>${esc(n)}</span>`).join('')+
+    `<span class="muted" style="text-transform:none;letter-spacing:0">суцільна заливка — зараз у роботі, пунктир — відпрацьовано</span>`):''}
+function pickColor(i){
+  const a=D.agents[i];if(!a)return;const cur=agentColor(a.name);
+  $('dlg-body').innerHTML=`<h2 id="dlg-title">Колір · ${esc(a.name)}</h2><p class="muted">Так квадрати цього агента виглядатимуть на карті в режимі «🎨 Агенти».</p>
+    <div class="swatches">${AG_PAL.map(c=>`<button class="sw${c===cur?' on':''}" style="background:${c}" onclick="setAgColor(${i},'${c}')" aria-label="${c}"></button>`).join('')}</div>`;
+  dlg.showModal();
+}
+function setAgColor(i,c){const a=D.agents[i];if(!a)return;a.color=c;dlg.close();save();hap()}
 function toggleWhole(){MAPWHOLE=!MAPWHOLE;const b=$('mw-btn');if(b){b.textContent=MAPWHOLE?'▦ Підквадрати':'◱ Цілком';b.classList.toggle('on',MAPWHOLE)}drawMap();hap()}
 function placeLabels(){
   if(!labLayer||!map)return;labLayer.clearLayers();
@@ -1596,7 +1628,7 @@ function _render(){
     const qs=[...new Set(D.records.filter(r=>r.agents.some(x=>sameAgent(x,a.name))).map(r=>r.q))]
       .sort((x,y)=>sortKey(x).localeCompare(sortKey(y),'uk',{numeric:true}));
     return `<div class="acard${a.left?' dim':''}">
-      <div class="ah"><b>${esc(a.name)}</b>${a.trainee?'<span class="tag">стажер</span>':''}
+      <div class="ah"><button class="aswatch" style="background:${agentColor(a.name)}" onclick="pickColor(${i})" aria-label="Колір агента"></button><b>${esc(a.name)}</b>${a.trainee?'<span class="tag">стажер</span>':''}
         <span class="stamp ${a.left?'s-none':'s-free'}">${a.left?'не працює':'працює'}</span></div>
       <div class="ai">${busy.length?`Зараз: <b>${esc(busy.join(', '))}</b>`:'<span class="muted">Зараз вільний</span>'}</div>
       ${qs.length?`<details class="aq"><summary>Опрацьовано: ${qs.length}</summary><div class="chips">${qs.map(q=>`<span class="tag">${esc(q)}</span>`).join('')}</div></details>`:''}
@@ -2132,7 +2164,7 @@ async function addAgent(){
     if(st)ex.start=st;
     if(trainee){ex.trainee=true;ex.traineeUntil=''}
     if(left&&!ex.left){ex.left=true;ex.leftDate=today()}
-  }else D.agents.push({name:n,start:st,left,leftDate:left?today():'',trainee,traineeUntil:''});
+  }else{const used=new Set(D.agents.map(x=>agentColor(x.name)));D.agents.push({name:n,start:st,left,leftDate:left?today():'',trainee,traineeUntil:'',color:AG_PAL.find(c=>!used.has(c))||agentColor(n)})}
   $('a-name').value='';$('a-start').value='';$('a-left').checked=false;$('a-trainee').checked=false;save();
 }
 async function delA(i){
@@ -2241,7 +2273,7 @@ function fromServer(res){
   d.records=res.records.map(r=>{const o={id:r.id,owner:r.owner,q:r.q,start:r.start,end:r.end||null,agents:r.agents||[],note:r.note||'',
       mgr:r.mgr||'',contracts:r.contracts??null,signed:r.signed??null,paid:r.paid??null,extraQs:r.extra_qs||[]};
     if(r.part)o.part=true;if(r.grp){o.grp=r.grp;o.src=r.src}return o});
-  d.agents=res.agents.map(a=>({id:a.id,owner:a.owner,name:a.name,start:a.start||'',left:!!a.left,leftDate:a.left_date||'',trainee:!!a.trainee,traineeUntil:a.trainee_until||'',mgr:a.mgr||''}));
+  d.agents=res.agents.map(a=>({id:a.id,owner:a.owner,name:a.name,start:a.start||'',left:!!a.left,leftDate:a.left_date||'',trainee:!!a.trainee,traineeUntil:a.trainee_until||'',mgr:a.mgr||'',color:a.color||''}));
   d.plan={};res.quadrants.forEach(x=>{if(x.plan_mgr)d.plan[x.name]=x.plan_mgr});
   let v=null;try{v=JSON.parse(localStorage.getItem(viewKey())||'null')}catch(_){}
   d.view=v&&v.c?v:{c:res.city.center||DEF.view.c,z:res.city.zoom||12};
@@ -2254,7 +2286,7 @@ function applyServer(res,replace){
   if(replace){D=sd;persistLocal();render();applyRole()}
 }
 const recKey=r=>JSON.stringify([r.q,r.start,r.end||null,r.agents||[],r.note||'',!!r.part,r.grp||null,r.src||null,r.mgr||'',r.contracts??null,r.signed??null,r.paid??null,r.extraQs||[]]);
-const agKey=a=>JSON.stringify([a.name,a.start||'',!!a.left,a.leftDate||'',!!a.trainee,a.traineeUntil||'']);
+const agKey=a=>JSON.stringify([a.name,a.start||'',!!a.left,a.leftDate||'',!!a.trainee,a.traineeUntil||'',a.color||'']);
 function srvDiff(){
   if(!BASE)return null;
   const uid=()=>crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16)});
