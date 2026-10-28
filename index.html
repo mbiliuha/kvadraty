@@ -244,6 +244,7 @@ button.big{width:100%;min-height:48px;font-size:12px}
 .qs-more summary{font:600 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);cursor:pointer;padding:4px 0}
 .hrow{display:grid;grid-template-columns:44px 1fr;gap:2px 10px;padding:8px 0;border-bottom:1px solid var(--rule);font-size:13px}
 .hrow>*:nth-child(n+3){grid-column:2}
+.hrow.w{grid-template-columns:78px 1fr}.hrow b{white-space:nowrap}
 .stat em{font-style:normal}
 .prow{display:flex;align-items:center;gap:10px;justify-content:space-between}
 .prow .pt{flex:1;min-width:0} .prow .pq{font-size:15px;margin-right:6px} .prow .pd{font-size:12px;margin-top:3px}
@@ -1749,10 +1750,14 @@ function openQ(q){
   const HN=3,bun=[];      // однакові виїзди по кількох підквадратах — одним рядком
   recs.forEach(r=>{const k=r.start+'|'+(r.end||'')+'|'+r.agents.join(',');const b=bun.find(x=>x.k===k&&!r.grp&&!x.r.grp);if(b)b.n++;else bun.push({k,r,n:1})});
   const shown=bun.slice(0,HN);
-  const hist=shown.map(({r,n})=>`<div class="hrow"><b class="num">${esc(!leaf&&r.grp?r.src+' весь':qLab(r))}${n>1?`<small> +${n-1}</small>`:''}</b>
+  const wide=shown.some(x=>x.n>1);
+  const hist=shown.map(({r,n})=>`<div class="hrow${wide?' w':''}"><b class="num">${esc(!leaf&&r.grp?r.src+' весь':qLab(r))}${n>1?`<small> +${n-1}</small>`:''}</b>
       <span class="num">${fmtS(r.start)} – ${r.end?fmtS(r.end):'зараз'}${r.end?' · '+dur(r.start,r.end):''} · ${esc(r.agents.join(', ')||'—')}</span>
       ${hasMet(r)&&FEAT.perf?`<span class="num">дог. ${r.contracts??0} · ${money(r.signed)||'0 ₴'}${delta(r)}</span>`:''}</div>`).join('')
     ||'<p class="muted" style="margin:6px 0">Записів немає.</p>';
+  // хто працював тут останнім (чужі записи — без імені, лише дата)
+  const lr=(leaf?[i.last]:i.kids.map(k=>k.last)).filter(Boolean).sort((a,b)=>(b.end||'').localeCompare(a.end||''))[0];
+  const lastWho=lr&&!(leaf&&i.active)?(lr.ext?`інший менеджер · до ${fmt(lr.end)}`:(lr.mgr?mgrTag(lr):(ownerTag(lr)||'').trim())?`${lr.mgr?mgrTag(lr):ownerTag(lr).trim()} · до ${fmt(lr.end)}`:''):'';
   let act='';
   if(leaf&&i.foreign){
     act=`<div class="warn w-yel">Зараз працює команда <b>${esc(i.foreign)}</b>. Видати цей квадрат не можна.</div>`;
@@ -1779,9 +1784,9 @@ function openQ(q){
     ${leaf&&i.inJob?`<div class="warn w-yel" style="margin:6px 0">Квадрат ${esc(parentOf(q))} зараз у заході «${esc(qLab(i.inJob))}» — відпочинок почнеться, коли закриють весь захід.</div>`:''}
     <div class="qs-sub muted">${leaf&&i.active?`в роботі з ${fmt(i.active.start)} · ${dur(i.active.start,today())}`:leaf&&i.last?`відпочиває ${dur(i.last.end,today())} · востаннє ${fmt(i.last.end)}`:leaf?'записів ще немає':''}</div>
     <div class="qs-act">${act}</div>
-    ${D.plan&&D.plan[q]?`<div class="muted" style="font-size:12px;margin:-4px 0 10px">Закріплений за: ${mgrTag({mgr:D.plan[q]})}</div>`:''}
-    <div class="qs-more"><div class="qs-lbl" style="margin:4px 0 2px">Останні заходи</div>${hist}
-      ${bun.length>HN||recs.length>shown.length?`<button class="xs" style="margin:8px 0 2px" onclick="histOf(${js(q)})">Уся історія квадрата · ${recs.length} ›</button>`:''}</div>
+    ${lastWho?`<div class="muted" style="font-size:12px;margin:-4px 0 10px">Востаннє працював: ${lastWho}</div>`:''}
+    ${recs.length?`<div class="qs-more"><div class="qs-lbl" style="margin:4px 0 2px">Останні заходи</div>${hist}
+      ${bun.length>HN||recs.length>shown.length?`<button class="xs" style="margin:8px 0 2px" onclick="histOf(${js(q)})">Уся історія квадрата · ${recs.length} ›</button>`:''}</div>`:''}
     <details class="qs-more"><summary>Керування</summary><div class="bar" style="margin:8px 0 0">
       ${!parentOf(q)?`<button class="xs" onclick="dlg.close();addSub(${js(q)})">+ підквадрат</button>`:''}
       ${D.geo[q]?`<button class="xs" onclick="dlg.close();startEdit(${js(q)})">✎ межі</button>`:''}
