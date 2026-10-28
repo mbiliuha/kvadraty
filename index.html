@@ -1022,7 +1022,8 @@ function qInfo(q){
   const recs=D.records.filter(r=>r.q===q||(r.extraQs&&r.extraQs.includes(q))).sort((a,b)=>a.start.localeCompare(b.start));
   const active=recs.find(r=>!r.end);
   const par=parentOf(q),covers=r=>r.q===par||(r.extraQs&&r.extraQs.includes(par));
-  const pRecs=par?D.records.filter(covers):[];
+  // захід на весь великий квадрат не перекриває підквадрат, який у межах цього заходу вже має власний запис
+  const pRecs=par?D.records.filter(covers).filter(p=>!recs.some(r=>r.start>=p.start&&(!p.end||r.start<=p.end))):[];
   const inJob=!active&&pRecs.find(r=>!r.end)||null;           // відкритий захід на весь великий квадрат
   let last=[...recs,...pRecs].filter(r=>r.end).sort((a,b)=>b.end.localeCompare(a.end))[0];
   const ex=SRV?EXT[q]:null,foreign=!active&&ex&&ex.busy_by?ex.busy_by:null;
