@@ -429,6 +429,9 @@ body.srv-manager .fullonly{display:none!important}
 .sw{aspect-ratio:1;min-height:0!important;padding:0!important;border-radius:50%;border:3px solid var(--card);box-shadow:0 0 0 1.2px var(--rule)}
 .sw.on{box-shadow:0 0 0 3px var(--ink)}
 #cm-btn.on{background:var(--ink);color:var(--paper)}
+body.no-perf .pc,body.no-perf .tab[data-v="perf"]{display:none!important}
+body.no-forecast .tab[data-v="forecast"]{display:none!important}
+body.single-mgr .mc{display:none!important}
 /* карта на весь екран */
 .fsbtn{width:34px;height:34px;line-height:32px!important;text-align:center;font-size:18px;background:var(--btnbg);color:var(--ink)!important;
   text-decoration:none;cursor:pointer}
@@ -580,7 +583,7 @@ body.map-full .fsbtn{width:44px;height:44px;line-height:42px!important;font-size
       <div class="fullonly"><label>Менеджер заходу</label><select id="f-mgr"></select></div>
       <div><label>Додаткові квадрати · якщо кілька одночасно</label><input id="f-extra" placeholder="напр. 22, 13"></div>
     </div>
-    <div class="row r3m">
+    <div class="row r3m pc">
       <div><label>Договорів</label><input id="f-con" type="number" inputmode="numeric" min="0"></div>
       <div><label>Укладено, ₴</label><input id="f-sig" type="number" inputmode="decimal" min="0"></div>
       <div><label>Оплата, ₴</label><input id="f-paid" type="number" inputmode="decimal" min="0"></div>
@@ -1696,13 +1699,13 @@ function renderJournal(){
     .sort((a,b)=>b.r.start.localeCompare(a.r.start));
   if($('j-hidden'))$('j-hidden').textContent=hidden?`Приховано ${hidden} записів по підквадратах — увімкніть «підквадрати», щоб побачити.`:'';
   $('tbl').innerHTML=
-    `<tr><th>Кв.</th><th>Початок</th><th>Кінець</th><th>Трив.</th><th>Агенти</th><th>Менеджер</th><th>Дог.</th><th>Укладено</th><th>Оплата</th><th>Примітка</th><th></th></tr>`+
+    `<tr><th>Кв.</th><th>Початок</th><th>Кінець</th><th>Трив.</th><th>Агенти</th><th class="mc">Менеджер</th><th class="pc">Дог.</th><th class="pc">Укладено</th><th class="pc">Оплата</th><th>Примітка</th><th></th></tr>`+
     rows.map(({r,idx})=>`<tr><td class="num"><b>${esc(qLab(r))}</b>${r.grp?`<br><span class="tag" title="запис створено як «весь квадрат ${esc(r.src)}»">◱ весь ${esc(r.src)}</span>`:''}</td><td class="num">${fmt(r.start)}</td>
       <td class="num">${r.end?fmt(r.end):'<span class="t-busy">в роботі</span>'}</td>
       <td class="num">${r.end?dur(r.start,r.end):'—'}${r.part?' <span class="tag" title="частковий день — не враховується у швидкості">½</span>':''}</td>
       <td>${r.agents.map(a=>`<span class="tag">${esc(a)}</span>`).join('')}</td>
-      <td>${mgrTag(r)||ownerTag(r)}</td>
-      <td class="num">${r.contracts??''}</td><td class="num">${money(r.signed)}</td><td class="num">${money(r.paid)}</td>
+      <td class="mc">${mgrTag(r)||ownerTag(r)}</td>
+      <td class="num pc">${r.contracts??''}</td><td class="num pc">${money(r.signed)}</td><td class="num pc">${money(r.paid)}</td>
       <td class="muted">${esc(r.note||'')}</td>
       <td style="white-space:nowrap"><button class="xs" onclick="editRec(${idx})">✎</button>
       <button class="d" onclick="del(${idx})">×</button></td></tr>`).join('');
@@ -1711,7 +1714,7 @@ function renderJournal(){
       <b class="jq">${esc(qLab(r))}</b>
       <div class="jm"><div class="jd">${fmtS(r.start)} – ${r.end?fmtS(r.end):'<span class="t-busy">в роботі</span>'}${r.end?` · ${dur(r.start,r.end)}`:''}${r.part?' · ½':''}${r.grp?` · <span class="muted">весь ${esc(r.src)}</span>`:''}</div>
         <div class="ja">${esc(r.agents.join(', ')||'—')}${r.mgr?' · '+mgrTag(r):ownerTag(r)}</div>
-        ${hasMet(r)?`<div class="jn num">дог. ${r.contracts??0} · укладено ${money(r.signed)||'0 ₴'}${r.paid?` · оплата ${money(r.paid)}`:''}</div>`:''}
+        ${hasMet(r)&&FEAT.perf?`<div class="jn num">дог. ${r.contracts??0} · укладено ${money(r.signed)||'0 ₴'}${r.paid?` · оплата ${money(r.paid)}`:''}</div>`:''}
         ${r.note?`<div class="jn">${esc(r.note)}</div>`:''}</div>
       <div class="jb"><button class="xs" onclick="editRec(${idx})" aria-label="Редагувати">✎</button><button class="d" onclick="del(${idx})" aria-label="Видалити">×</button></div>
     </div>`).join('')||'<p class="muted">Записів немає.</p>';
@@ -1871,7 +1874,7 @@ function renderToday(){
     .sort((a,b)=>a.min.localeCompare(b.min)).slice(0,5);
   const fd=forecastData();
   const queue=
-    `<p class="muted num" style="margin:0 0 8px">МОЖНА РОЗДАВАТИ: ${fd.ready.length}${fd.rate>0?` · ТЕМП ≈ ${fd.rate.toFixed(1)}/МІС`:''}${fd.s0?` · ЗАКІНЧАТЬСЯ ≈ ${fmt(fd.s0.day)}`:''}</p>`+
+    `<p class="muted num" style="margin:0 0 8px">МОЖНА РОЗДАВАТИ: ${fd.ready.length}${fd.rate>0?` · ТЕМП ≈ ${fd.rate.toFixed(1)}/МІС`:''}${fd.s0&&FEAT.forecast?` · ЗАКІНЧАТЬСЯ ≈ ${fmt(fd.s0.day)}`:''}</p>`+
     (ready.slice(0,6).map(i=>`<div class="trow"><div><b class="num">${esc(i.q)}</b>
       <span class="stamp s-${i.cls}">${esc(i.txt)}</span> <span class="muted">${i.last?'відпочив '+dur(i.last.end,td):'записів немає'}</span></div>
       <button class="xs" onclick="openQ(${js(i.q)})">Відкрити</button></div>`).join('')||'<p class="muted">Готових немає.</p>')+
@@ -2252,7 +2255,7 @@ function shareReport(){
 /* ══════════ СПІЛЬНА БАЗА (Supabase) ══════════
    Сервер перевіряє підпис Telegram і віддає лише дозволене:
    свої записи й агенти — повністю; чужі квадрати — лише «в роботі · менеджер» і дату останнього закриття. */
-let MANAGERS=[],MYMGR='',MAPWHOLE=false;
+let MANAGERS=[],MYMGR='',MAPWHOLE=false,FEAT={forecast:true,perf:true};
 let CITY=null,ROLE=null,ME=null,PEOPLE={},EXT={},BASE=null,CITIES=[],IS_ADMIN=false,syncT=null,syncing=false,srvDirty=false;
 const FULL=()=>ROLE==='admin'||ROLE==='lead';
 const ownerTag=r=>(SRV&&FULL()&&r.owner&&r.owner!==ME)?` <span class="tag own">${esc(PEOPLE[r.owner]||'інший')}</span>`:'';
@@ -2281,7 +2284,8 @@ function fromServer(res){
   return d;
 }
 function applyServer(res,replace){
-  ROLE=res.role;ME=res.me;PEOPLE=res.people||{};MANAGERS=res.managers||[];MYMGR=res.myMgr||'';EXT={};(res.others||[]).forEach(o=>EXT[o.q]=o);
+  ROLE=res.role;ME=res.me;PEOPLE=res.people||{};MANAGERS=res.managers||[];MYMGR=res.myMgr||'';EXT={};
+  FEAT=Object.assign({forecast:true,perf:true},(res.city&&res.city.features)||{});(res.others||[]).forEach(o=>EXT[o.q]=o);
   const sd=fromServer(res);BASE=clone(sd);
   if(replace){D=sd;persistLocal();render();applyRole()}
 }
@@ -2334,6 +2338,11 @@ function applyRole(){
   const full=FULL();
   ['s-ideal','s-min','s-repeat'].forEach(id=>{const e=$(id);if(e)e.disabled=!full});
   document.body.classList.toggle('srv-manager',!full);fillMgrSel();
+  // функції міста: «Прогноз» — для міст з одним менеджером (Чернівці), «Результативність» — для великих міст
+  document.body.classList.toggle('no-perf',!FEAT.perf);document.body.classList.toggle('no-forecast',!FEAT.forecast);
+  document.body.classList.toggle('single-mgr',new Set(D.records.map(r=>r.mgr).filter(Boolean)).size<=1&&MANAGERS.length<=1);
+  const cur=document.querySelector('.tab.on');
+  if(cur&&((cur.dataset.v==='forecast'&&!FEAT.forecast)||(cur.dataset.v==='perf'&&!FEAT.perf)))goTab('map');
 }
 function gate(title,text,extra){
   let g=$('gate');if(!g){g=document.createElement('div');g.id='gate';document.body.appendChild(g)}
@@ -2459,8 +2468,8 @@ async function transferOwner(){
 function moreOpen(){
   $('dlg-body').innerHTML=`<h2 id="dlg-title">Ще</h2><div class="morelist">
     <button onclick="goTab('tiles')">▦ Реєстр територій</button>
-    <button onclick="goTab('forecast')">◔ Прогноз</button>
-    <button onclick="goTab('perf')">₴ Результативність</button>
+    ${FEAT.forecast?`<button onclick="goTab('forecast')">◔ Прогноз</button>`:''}
+    ${FEAT.perf?`<button onclick="goTab('perf')">₴ Результативність</button>`:''}
     <button onclick="reportDlg()">▤ Звіт за місяць</button>
     ${SRV&&IS_ADMIN?'<button onclick="adminDlg()">👥 Доступи й міста</button>':''}
     ${SRV&&CITIES.length>1?'<button onclick="cityDlg()">⇄ Інше місто</button>':''}
