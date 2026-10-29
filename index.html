@@ -185,7 +185,7 @@ body.sat .leaflet-tile-pane{filter:saturate(.75) brightness(.95)}
   border-left-width:5px;margin-bottom:14px}
 #drawbox.on,#editbox.on{display:flex;gap:11px;align-items:center;flex-wrap:wrap}
 #drawbox b,#editbox b{font:700 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
-.vh{width:13px;height:13px;background:#fff;border:2px solid var(--acc);box-shadow:0 0 3px rgba(0,0,0,.5);cursor:move}
+.vh{width:13px;height:13px;background:#fff;border:2.5px solid #E0007A;box-shadow:0 0 3px rgba(0,0,0,.5);cursor:move}
 .vm{width:11px;height:11px;background:rgba(255,255,255,.7);border:1.5px dashed var(--busy);border-radius:50%;cursor:copy}
 .legend{display:flex;gap:18px;flex-wrap:wrap;margin:0 0 14px;font:500 10px/1 var(--mono);
   letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
@@ -1195,11 +1195,19 @@ function drawMap(){
   D.quadrants.forEach(q=>{
     const pts=D.geo[q];if(!pts||pts.length<3)return;n++;
     if(q===editing)return;
+    const gq=drawing||editing;
+    if(gq){ // режим малювання: усі контури — чіткі темні лінії без заливки, батько поточного — жирний пунктир
+      const ink=document.documentElement.classList.contains('dark')?'#F2EDE3':'#14171C',par=parentOf(gq);
+      const big=q===par||q===gq,kid=par&&parentOf(q)===par;
+      L.polygon(pts,{color:ink,weight:big?3.2:kid?2:1.4,opacity:big?1:kid?.95:.6,dashArray:q===par?'9,6':null,fill:true,fillColor:ink,fillOpacity:kid?.06:.02,interactive:false}).addTo(layer);
+      if(isLeaf(q)||q===par)labCand.push({q,pts,c:ink,par:null});
+      return;
+    }
     if(MAPWHOLE&&parentOf(q)&&D.geo[parentOf(q)])return;       // режим «цілком»: підквадрати не малюємо
     const leaf=isLeaf(q)||MAPWHOLE;
     const i=isLeaf(q)?qInfo(q):groupInfo(q),c=COL[i.cls];
     if(!leaf){ // батько з дітьми — лише контур
-      L.polygon(pts,{color:document.documentElement.classList.contains('dark')?'#ECE6D9':'#1B2028',weight:1.6,fill:false,opacity:.45,interactive:false}).addTo(layer);
+      L.polygon(pts,{color:document.documentElement.classList.contains('dark')?'#ECE6D9':'#1B2028',weight:2,fill:false,opacity:.75,interactive:false}).addTo(layer);
       return;
     }
     if(mapHide.has(i.cls))return;
@@ -1349,11 +1357,13 @@ async function startDraw(){
   map.doubleClickZoom.disable();drawing=q;tmpPts=[];
   document.getElementById('drawbox').classList.add('on');
   document.getElementById('draw-title').textContent='Малюємо '+q;
-  drawPreview();
+  drawMap();drawPreview();
 }
 function drawPreview(){
   if(tmpLine){map.removeLayer(tmpLine);tmpLine=null}
-  if(tmpPts.length)tmpLine=L.polygon(tmpPts,{color:'#C1401D',weight:2,dashArray:'5,5',fillOpacity:.12}).addTo(map);
+  if(tmpPts.length){tmpLine=L.layerGroup().addTo(map);
+    L.polygon(tmpPts,{color:'#E0007A',weight:3.5,fillColor:'#E0007A',fillOpacity:.18,interactive:false}).addTo(tmpLine);
+    tmpPts.forEach((p,i)=>L.circleMarker(p,{radius:i===tmpPts.length-1?6:4,color:'#fff',weight:2,fillColor:'#E0007A',fillOpacity:1,interactive:false}).addTo(tmpLine));}
   document.getElementById('draw-n').textContent='ТОЧОК: '+tmpPts.length;syncTool();
 }
 function undoPt(){tmpPts.pop();drawPreview()}
@@ -1376,7 +1386,7 @@ function syncTool(){
 function finishDraw(){if(tmpPts.length<3){alert('Треба щонайменше 3 точки');return}
   if(D.quadrants.includes(drawing))D.geo[drawing]=tmpPts;cancelDraw();save()}
 function cancelDraw(){drawing=null;tmpPts=[];if(map){if(tmpLine){map.removeLayer(tmpLine);tmpLine=null}map.doubleClickZoom.enable()}
-  document.getElementById('drawbox').classList.remove('on');syncTool()}
+  document.getElementById('drawbox').classList.remove('on');syncTool();drawMap()}
 
 /* ── редагування меж ──────────────────────── */
 let editing=null,editPts=null,editPoly=null,handles=[],editHist=[];
@@ -1396,7 +1406,7 @@ function clearHandles(){handles.forEach(h=>map.removeLayer(h));handles=[];
   if(editPoly){map.removeLayer(editPoly);editPoly=null}}
 function drawEdit(){
   clearHandles();
-  editPoly=L.polygon(editPts,{color:'#C1401D',weight:2.5,dashArray:'6,4',fillOpacity:.14}).addTo(map);
+  editPoly=L.polygon(editPts,{color:'#E0007A',weight:3.5,fillColor:'#E0007A',fillOpacity:.18}).addTo(map);
   editPts.forEach((p,i)=>{
     const h=L.marker(p,{draggable:true,icon:L.divIcon({className:'',html:'<div class="vh"></div>',iconSize:[13,13],iconAnchor:[6,6]})}).addTo(map);
     h.on('dragstart',pushEdit);
